@@ -37,16 +37,22 @@ class CompileTypeScriptCommand extends Command
     {
         $io = new SymfonyStyle($input, $output);
 
-        if (!$this->compiler->isAvailable()) {
-            $io->warning(
-                'TypeScript is not installed (node_modules/.bin/tsc missing). '
-                . 'Run "pnpm add -D typescript" first. Skipping.'
-            );
+        // Foreign vendor package that ships its own assets — nothing for us to build.
+        if (!$this->compiler->shouldCompile()) {
+            $io->note('Not a build context for this package; nothing to compile.');
 
             return Command::SUCCESS;
         }
 
-        $process = $this->compiler->compile();
+        // This bundle ships no committed JS, so a missing toolchain is a hard error, not a skip.
+        try {
+            $process = $this->compiler->compile();
+        } catch (\RuntimeException $e) {
+            $io->error($e->getMessage());
+
+            return Command::FAILURE;
+        }
+
         if (!$process->isSuccessful()) {
             $io->error('TypeScript compilation failed.');
             $output->writeln($process->getOutput());

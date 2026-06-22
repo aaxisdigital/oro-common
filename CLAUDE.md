@@ -60,7 +60,12 @@ independent of each other. **When something is needed by two or more Aaxis bundl
   to the admin role by `Migrations/Data/ORM/LoadAaxisCommonAdminPermissions`.
 - Schema is a single consolidated installer (`Migrations/Schema/AaxisCommonBundleInstaller`) — this is
   pre-production, so edit the install rather than adding upgrade migrations.
-- Both `.ts` sources and the emitted `.js`/`.d.ts` in `Resources/public/js` are committed.
+- Only the `.ts` sources in `Resources/js-src` are committed. The emitted `.js`/`.d.ts` under
+  `Resources/public/js` are **generated** at asset-build time and **git-ignored** — never commit or
+  hand-edit them. `TypeScriptCompiler` now also rebuilds when this bundle is installed under
+  `vendor/aaxisdigital/oro*`, and the asset build **fails loudly** (no silent skip) if `tsc` is
+  missing or compilation fails — so the consuming app must have `typescript` installed
+  (`node_modules/.bin/tsc`).
 
 ## Verify after changes
 

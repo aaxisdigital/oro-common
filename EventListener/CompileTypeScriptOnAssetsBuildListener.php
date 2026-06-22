@@ -39,24 +39,39 @@ class CompileTypeScriptOnAssetsBuildListener implements EventSubscriberInterface
         }
 
         $label = $this->compiler->getLabel();
+        $output = $event->getOutput();
 
-        if (!$this->compiler->isAvailable()) {
-            $event->getOutput()->writeln(
-                sprintf('<comment>[%s] TypeScript not installed; skipping TS compilation.</comment>', $label)
-            );
-
+        // Not one of our packages in a build context (e.g. installed as a plain vendor/ dependency
+        // that ships its own assets) — nothing to do.
+        if (!$this->compiler->shouldCompile()) {
             return;
         }
 
-        $event->getOutput()->writeln(sprintf('<info>[%s] Compiling TypeScript sources...</info>', $label));
-        $process = $this->compiler->compile();
+        // This bundle ships no committed JS, so its TypeScript MUST compile here. If the toolchain is
+        // missing or compilation fails, abort the asset build loudly rather than silently shipping a
+        // UI with no JS.
+        $output->writeln(sprintf('<info>[%s] Compiling TypeScript sources...</info>', $label));
+
+        try {
+            $process = $this->compiler->compile();
+        } catch (\RuntimeException $e) {
+            throw new \RuntimeException(sprintf(
+                '[%s] Cannot compile TypeScript and there is no committed JS to fall back on: %s',
+                $label,
+                $e->getMessage()
+            ), 0, $e);
+        }
+
         if (!$process->isSuccessful()) {
-            $event->getOutput()->writeln(sprintf('<error>[%s] TypeScript compilation failed:</error>', $label));
-            $event->getOutput()->writeln($process->getOutput() . $process->getErrorOutput());
+            $output->writeln(sprintf('<error>[%s] TypeScript compilation failed:</error>', $label));
+            $output->writeln($process->getOutput() . $process->getErrorOutput());
 
-            return;
+            throw new \RuntimeException(sprintf(
+                '[%s] TypeScript compilation failed; aborting asset build.',
+                $label
+            ));
         }
 
-        $event->getOutput()->writeln(sprintf('<info>[%s] TypeScript compiled.</info>', $label));
+        $output->writeln(sprintf('<info>[%s] TypeScript compiled.</info>', $label));
     }
 }
