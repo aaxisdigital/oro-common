@@ -26,6 +26,15 @@ Reusable classes used by every Aaxis bundle that ships TypeScript:
 - `Command/CompileTypeScriptCommand` — `bin/console` wrapper around the compiler.
 - `EventListener/CompileTypeScriptOnAssetsBuildListener` — recompiles before `oro:assets:build`.
 
+> **⚠️ Required: the TypeScript compiler must be installed in the project's `node_modules`.**
+> The compiler invokes `node_modules/.bin/tsc`, so the consuming project **must** have `typescript`
+> as a (dev) dependency — install it with `npm i -D typescript` (or `pnpm add -D typescript`).
+> The Aaxis bundles ship **only** their `.ts` sources; the emitted `.js` is generated at
+> asset-build time and is **not** committed, so there is no pre-built JavaScript to fall back on.
+> If `tsc` is missing (or compilation fails), the asset build **fails loudly** instead of silently
+> skipping — a misconfigured build aborts rather than shipping a UI with no JavaScript.
+> The compiler also rebuilds our own packages when installed under `vendor/aaxisdigital/oro*`.
+
 These are **not** auto-registered here. Following the existing per-bundle pattern, each consuming
 bundle wires its own instances in its `services.yml`, pointing the compiler at its own
 `Resources/js-src/tsconfig.json` and giving the command its own name, e.g.:
@@ -133,15 +142,27 @@ composer require aaxisdigital/oro-common:7.0.*
 ```
 
 The bundle is auto-registered via `Resources/config/oro/bundles.yml` (the Oro kernel scans `vendor/`
-and `src/` — no `AppKernel` edit needed). After install/update:
+and `src/` — no `AppKernel` edit needed).
+
+**Prerequisite — install the TypeScript compiler** (see "TypeScript build pipeline" above). The
+emitted `.js` is **not** committed; it is generated on `oro:assets:build`, which requires `tsc` and
+will fail otherwise:
+
+```bash
+npm i -D typescript        # or: pnpm add -D typescript  — provides node_modules/.bin/tsc
+```
+
+After install/update:
 
 ```bash
 php bin/console cache:clear --no-interaction
 php bin/console oro:migration:load --force                 # creates aaxis_grid_preference (+ admin ACL)
-php bin/console oro:assets:build --no-interaction          # compiles SCSS/JS bundles
+php bin/console oro:assets:build --no-interaction          # compiles TypeScript (requires tsc) + SCSS/JS bundles
 php bin/console oro:translation:load --no-interaction
 php bin/console oro:translation:rebuild-cache --no-interaction
 ```
 
-The shared TypeScript widgets are compiled by the consuming bundles' own `aaxis:*:typescript:compile`
-commands (this bundle's widgets are emitted into `Resources/public/js` and committed).
+The shared TypeScript widgets are compiled from `Resources/js-src` into `Resources/public/js` by the
+consuming bundles' own `aaxis:*:typescript:compile` commands (also run automatically before
+`oro:assets:build`). Only the `.ts` sources are committed — the emitted `.js`/`.d.ts` are generated
+and git-ignored.
