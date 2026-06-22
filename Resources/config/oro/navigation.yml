@@ -1,0 +1,16 @@
+navigation:
+    menu_config:
+        items:
+            # Shared top-level group rendered in the back-office (admin) application menu. The
+            # individual Aaxis bundles attach their own sub-groups under this node.
+            aaxis_tab:
+                label: 'aaxis.common.menu.aaxis_tab.label'
+                uri: '#'
+                position: 250
+                extras:
+                    icon: aaxis-menu-icon
+
+        tree:
+            application_menu:
+                children:
+                    aaxis_tab: ~

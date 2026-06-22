@@ -1,0 +1,17 @@
+services:
+    _defaults:
+        public: true
+
+    Aaxis\Bundle\CommonBundle\Controller\GridPreferenceController:
+        calls:
+            - [setContainer, ['@Psr\Container\ContainerInterface']]
+        tags:
+            - { name: container.service_subscriber }
+            - { name: container.service_subscriber, id: aaxis_common.grid_preference_manager, key: Aaxis\Bundle\CommonBundle\Manager\GridPreferenceManager }
+
+    Aaxis\Bundle\CommonBundle\Controller\ConnectionTestController:
+        calls:
+            - [setContainer, ['@Psr\Container\ContainerInterface']]
+        tags:
+            - { name: container.service_subscriber }
+            - { name: container.service_subscriber, id: aaxis_common.connection_test_registry, key: Aaxis\Bundle\CommonBundle\Connection\ConnectionTestRegistry }

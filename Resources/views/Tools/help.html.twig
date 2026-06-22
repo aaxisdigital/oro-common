@@ -1,0 +1,32 @@
+{#
+    Reusable tool-help renderer.
+
+    Parameters:
+      - intro:    translation key for an introductory paragraph (optional)
+      - sections: list of sections, each:
+            { title: <transKey>, items: [<transKey>, ...] }              -> rendered as <h5> + <ul><li>
+            { title: <transKey>, paragraphs: [<transKey>, ...] }         -> rendered as <h5> + <p>
+
+    All visible text comes from translations; only the structure lives here.
+#}
+{% macro render(intro, sections) %}
+    <div class="aaxis-tool-help">
+        {% if intro is not empty %}
+            <p>{{ intro|trans }}</p>
+        {% endif %}
+        {% for section in sections %}
+            <h5>{{ section.title|trans }}</h5>
+            {% if section.paragraphs is defined %}
+                {% for paragraph in section.paragraphs %}
+                    <p>{{ paragraph|trans }}</p>
+                {% endfor %}
+            {% else %}
+                <ul>
+                    {% for item in section.items %}
+                        <li>{{ item|trans }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endfor %}
+    </div>
+{% endmacro %}

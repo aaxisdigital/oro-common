@@ -1,0 +1,58 @@
+services:
+    _defaults:
+        autowire: false
+        autoconfigure: false
+        public: false
+
+    # Per-user DataGrid layout preferences, shared by every Aaxis grid.
+    Aaxis\Bundle\CommonBundle\Manager\GridPreferenceManager:
+        arguments:
+            - '@doctrine'
+            - '@oro_security.token_accessor'
+
+    aaxis_common.grid_preference_manager:
+        alias: Aaxis\Bundle\CommonBundle\Manager\GridPreferenceManager
+        public: true
+
+    # Shared "test connection" registry. Feature bundles contribute per-tool testers via the
+    # "aaxis_common.connection_tester" tag (keyed by tool); the registry dispatches to them.
+    Aaxis\Bundle\CommonBundle\Connection\ConnectionTestRegistry:
+        arguments:
+            - !tagged_locator { tag: aaxis_common.connection_tester, index_by: tool }
+
+    aaxis_common.connection_test_registry:
+        alias: Aaxis\Bundle\CommonBundle\Connection\ConnectionTestRegistry
+        public: true
+
+    # Shared retention purge used by each bundle's nightly history-cleanup command.
+    Aaxis\Bundle\CommonBundle\Command\HistoryRetentionPurger:
+        arguments:
+            - '@doctrine'
+
+    aaxis_common.history_retention_purger:
+        alias: Aaxis\Bundle\CommonBundle\Command\HistoryRetentionPurger
+        public: true
+
+    # CommonBundle's own TypeScript build (compiles the shared widgets).
+    aaxis_common.typescript_compiler:
+        class: Aaxis\Bundle\CommonBundle\Build\TypeScriptCompiler
+        arguments:
+            - '%kernel.project_dir%'
+            - '@logger'
+            - '%aaxis_common.bundle_dir%/Resources/js-src/tsconfig.json'
+            - 'AaxisCommonBundle'
+
+    aaxis_common.typescript_compile_command:
+        class: Aaxis\Bundle\CommonBundle\Command\CompileTypeScriptCommand
+        arguments:
+            - '@aaxis_common.typescript_compiler'
+            - 'aaxis:common:typescript:compile'
+        tags:
+            - { name: console.command, command: 'aaxis:common:typescript:compile' }
+
+    aaxis_common.compile_typescript_on_assets_build_listener:
+        class: Aaxis\Bundle\CommonBundle\EventListener\CompileTypeScriptOnAssetsBuildListener
+        arguments:
+            - '@aaxis_common.typescript_compiler'
+        tags:
+            - { name: kernel.event_subscriber }

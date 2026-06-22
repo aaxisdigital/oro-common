@@ -1,0 +1,32 @@
+{
+    "name": "aaxisdigital/oro-common",
+    "type": "library",
+    "description": "Shared base bundle for the Aaxis Oro bundles: the Aaxis application-menu group, a reusable DataGrid widget with per-user preferences, a TypeScript build pipeline, a connection-test registry and shared history-retention purge.",
+    "keywords": ["oro", "orocommerce", "oroplatform", "aaxis", "bundle"],
+    "license": "proprietary",
+    "authors": [
+        {
+            "name": "AAXIS Digital",
+            "homepage": "https://www.aaxis.io/"
+        }
+    ],
+    "require": {
+        "php": ">=8.4",
+        "oro/platform": "7.0.*"
+    },
+    "autoload": {
+        "psr-4": {
+            "Aaxis\\Bundle\\CommonBundle\\": ""
+        },
+        "exclude-from-classmap": [
+            "/Tests/"
+        ]
+    },
+    "minimum-stability": "dev",
+    "prefer-stable": true,
+    "extra": {
+        "branch-alias": {
+            "dev-main": "7.0.x-dev"
+        }
+    }
+}

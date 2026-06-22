@@ -1,0 +1,14 @@
+aaxis:
+    common:
+        menu:
+            aaxis_tab:
+                label: Aaxis
+        grid:
+            columns_title: 'Columns'
+            refresh: 'Refresh'
+        acl:
+            category:
+                label: 'Aaxis Common'
+            aaxis_common:
+                label: 'Access shared grid preferences'
+                description: 'Allow saving/loading per-user DataGrid layout preferences used by Aaxis grids.'

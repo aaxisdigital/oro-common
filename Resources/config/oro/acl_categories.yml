@@ -1,0 +1,5 @@
+acl_categories:
+    aaxis_common:
+        label: aaxis.common.acl.category.label
+        tab: true
+        priority: 248

@@ -1,0 +1,6 @@
+css:
+    inputs:
+        # Provides the "A" letter glyph used as the shared "Aaxis" menu-group icon.
+        - 'bundles/aaxiscommon/css/scss/menu-icon.scss'
+        # Reusable DataGrid / dialog / record-form widget styles.
+        - 'bundles/aaxiscommon/css/scss/grid.scss'

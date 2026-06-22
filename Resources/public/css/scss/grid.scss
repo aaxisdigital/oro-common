@@ -1,0 +1,777 @@
+/* @theme: admin.oro; */
+
+// --- Reusable data grid -----------------------------------------------------
+
+.aaxis-grid {
+    position: relative;
+    padding-bottom: 64px;
+
+    &__table {
+        width: 100%;
+        margin: 0;
+        table-layout: fixed;
+
+        // Truncate any overflowing cell content with an ellipsis.
+        td {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        // Zebra striping: alternate white / light-gray body rows.
+        tbody tr:nth-child(odd) {
+            background: #fff;
+        }
+
+        tbody tr:nth-child(even) {
+            background: #f7f9fb;
+        }
+
+        tbody tr:hover {
+            background: #eef3f8;
+        }
+    }
+
+    &__th-inner {
+        display: inline-flex;
+        align-items: center;
+        white-space: nowrap;
+    }
+
+    &__th--sortable {
+        cursor: pointer;
+        user-select: none;
+
+        &:hover {
+            background: rgba(43, 108, 176, 0.06);
+        }
+    }
+
+    &__th--active {
+        color: #2b6cb0;
+    }
+
+    &__sort-ind {
+        font-size: 12px;
+        min-width: 6px;
+        margin-left: 8px;
+    }
+
+    // Centered alignment for number/boolean columns (header + cells).
+    &__col--center {
+        text-align: center;
+    }
+
+    // Cells whose value can be copied on click.
+    &__cell--copyable {
+        cursor: pointer;
+    }
+
+    &__filter-btn {
+        border: 0;
+        background: transparent;
+        padding: 0 2px;
+        margin-left: 8px;
+        font-size: 12px;
+        line-height: 1;
+        cursor: pointer;
+        // Greyed when no filter set.
+        color: #c2cad2;
+
+        &:hover {
+            color: #8a98a6;
+        }
+
+        // Dark/active when a filter value is defined for this column.
+        &--active {
+            color: #1b3a5b;
+        }
+    }
+
+    &__col-actions {
+        width: 110px;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    &__badge {
+        display: inline-block;
+        padding: 2px 10px;
+        border-radius: 12px;
+        font-size: 12px;
+        line-height: 18px;
+
+        &--on {
+            background: #e3f3e6;
+            color: #2c7a3f;
+        }
+
+        &--off {
+            background: #f0f0f0;
+            color: #7a7a7a;
+        }
+    }
+
+    &__action {
+        border: 0;
+        background: transparent;
+        padding: 2px 4px;
+        margin-left: 6px;
+        color: #5c6b7a;
+        font-size: 14px;
+        line-height: 1;
+        cursor: pointer;
+
+        &:hover {
+            color: #2b6cb0;
+        }
+
+        &--danger:hover {
+            color: #c0392b;
+        }
+    }
+
+    &__empty {
+        padding: 24px 0;
+        text-align: center;
+    }
+
+    // Pagination toolbar — floating, centered at the bottom of the page.
+    &__pager {
+        position: fixed;
+        left: 50%;
+        bottom: 16px;
+        transform: translateX(-50%);
+        z-index: 40;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 20px;
+        padding: 8px 18px;
+        background: #fff;
+        border: 1px solid #d6dde4;
+        border-radius: 22px;
+        box-shadow: 0 6px 20px rgba(17, 24, 33, 0.18);
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    &__pager-nav {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+    }
+
+    &__pager-info {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 13px;
+        color: #5c6b7a;
+        text-align: center;
+    }
+
+    &__pager-label {
+        white-space: nowrap;
+    }
+
+    // Editable page number: a contenteditable span styled as inline text so it lines up exactly
+    // with the surrounding labels (no native input chrome or baseline mismatch).
+    &__pager-page {
+        min-width: 18px;
+        padding: 0 5px;
+        text-align: center;
+        cursor: text;
+        border-radius: 3px;
+
+        &:hover {
+            background: #eef1f4;
+        }
+
+        &:focus {
+            outline: none;
+            background: #fff;
+            box-shadow: inset 0 0 0 1px #c7d0d9;
+        }
+    }
+
+    // Borderless previous/next navigation icons.
+    &__pager-btn {
+        border: 0;
+        background: transparent;
+        padding: 2px 6px;
+        color: #5c6b7a;
+        line-height: 1;
+        cursor: pointer;
+        border-radius: 4px;
+
+        &:hover:not(:disabled) {
+            background: #f0f3f6;
+            color: #2b3a4a;
+        }
+
+        &:disabled {
+            opacity: 0.4;
+            cursor: default;
+        }
+    }
+
+    &__pagesize {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-size: 13px;
+        color: #5c6b7a;
+        white-space: nowrap;
+    }
+
+    // Borderless per-page selector.
+    &__pagesize-select {
+        width: auto;
+        height: 28px;
+        padding: 2px 6px;
+        border: 0;
+        background-color: transparent;
+        color: #2b3a4a;
+        font-size: 13px;
+        cursor: pointer;
+        box-shadow: none;
+
+        &:focus {
+            outline: none;
+        }
+    }
+
+    // Per-column filter popover
+    &__popover {
+        position: absolute;
+        z-index: 30;
+        width: 240px;
+        box-sizing: border-box;
+        padding: 12px;
+        background: #fff;
+        border: 1px solid #d6dde4;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(17, 24, 33, 0.18);
+
+        &[hidden] {
+            display: none;
+        }
+
+        .form-control {
+            width: 100%;
+            height: 36px;
+            box-sizing: border-box;
+            max-width: 100%;
+        }
+    }
+
+    &__popover-row,
+    &__popover-value {
+        margin-bottom: 8px;
+    }
+
+    &__popover-datemode {
+        margin-bottom: 6px;
+    }
+
+    &__popover-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+    }
+
+    // Hidden column cells/headers
+    &__cell--hidden {
+        display: none;
+    }
+
+    // Column show/hide menu (anchored to the gear button, fixed positioning)
+    &__colmenu {
+        position: fixed;
+        z-index: 1050;
+        padding: 8px 0;
+        background: #fff;
+        border: 1px solid #d6dde4;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(17, 24, 33, 0.18);
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    &__colmenu-title {
+        padding: 2px 14px 6px;
+        font-size: 11px;
+        font-weight: font-weight('bold');
+        text-transform: uppercase;
+        color: #8a98a6;
+    }
+
+    &__colmenu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        padding: 5px 14px;
+        font-weight: font-weight('normal');
+        cursor: pointer;
+
+        &:hover {
+            background: rgba(43, 108, 176, 0.06);
+        }
+
+        &.is-dragging {
+            opacity: 0.5;
+            background: rgba(43, 108, 176, 0.12);
+        }
+    }
+
+    &__colmenu-handle {
+        color: #b6c2cf;
+        cursor: grab;
+        font-size: 12px;
+    }
+
+    &__colmenu-label {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin: 0;
+        font-weight: font-weight('normal');
+        cursor: pointer;
+        flex: 1 1 auto;
+    }
+}
+
+// Attribute count cell with names tooltip (Entity grid)
+
+// --- Reusable record form modal --------------------------------------------
+
+.aaxis-rfm {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+
+    &__backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 24, 33, 0.45);
+        opacity: 0;
+        transition: opacity 0.18s ease;
+    }
+
+    &__dialog {
+        position: relative;
+        margin: 8vh 16px;
+        width: 560px;
+        min-width: 360px;
+        min-height: 280px;
+        max-width: calc(100vw - 32px);
+        max-height: 84vh;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(17, 24, 33, 0.3);
+        opacity: 0;
+        transform: translateY(-10px);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        // Allow the user to resize the popup (handle at the bottom-right corner).
+        resize: both;
+        overflow: hidden;
+    }
+
+    &.is-open &__backdrop {
+        opacity: 1;
+    }
+
+    &.is-open &__dialog {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    &__head {
+        position: relative;
+        padding: 20px 24px 12px;
+        border-bottom: 1px solid #eef1f4;
+    }
+
+    &__title {
+        margin: 0;
+        font-size: 20px;
+        font-weight: font-weight('bold');
+        color: #1b3a5b;
+    }
+
+    &__subtitle {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: #8a98a6;
+    }
+
+    &__close {
+        position: absolute;
+        top: 16px;
+        right: 16px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #8a98a6;
+        font-size: 16px;
+        cursor: pointer;
+
+        &:hover {
+            background: #f0f3f6;
+            color: #2b3a4a;
+        }
+    }
+
+    &__form {
+        display: flex;
+        flex-direction: column;
+        min-height: 0;
+        flex: 1 1 auto;
+    }
+
+    &__alert {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 16px 24px 0;
+        padding: 10px 14px;
+        background: #fdecea;
+        border: 1px solid #f5c6c2;
+        border-left: 4px solid #c0392b;
+        border-radius: 4px;
+        color: #922b21;
+        font-size: 13px;
+    }
+
+    &__body {
+        padding: 16px 24px;
+        overflow-y: auto;
+    }
+
+    &__field {
+        margin-bottom: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+
+    // A line holding several fields side by side (each field's `flex` set inline from its width).
+    &__row {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+
+        > .aaxis-rfm__field {
+            min-width: 0;
+        }
+    }
+
+    &__label {
+        font-weight: font-weight('bold');
+        color: #2b3a4a;
+        font-size: 13.5px;
+    }
+
+    &__req {
+        color: #c0392b;
+    }
+
+    &__control {
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    // Single-line controls share the Select2 height so combos and inputs line up.
+    input.aaxis-rfm__control,
+    select.aaxis-rfm__control {
+        height: 36px;
+    }
+
+    // Make the Select2 combobox fill the field and match the height of text inputs.
+    .select2-container {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .select2-container .select2-choice {
+        min-height: 36px;
+        align-items: center;
+        box-sizing: border-box;
+    }
+
+    &__field-error {
+        color: #c0392b;
+        font-size: 12px;
+        min-height: 0;
+
+        &:empty {
+            display: none;
+        }
+    }
+
+    // Toggle switch
+    &__switch {
+        display: inline-flex;
+        align-items: center;
+        cursor: pointer;
+        margin: 0;
+
+        input {
+            position: absolute;
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+    }
+
+    &__switch-track {
+        position: relative;
+        width: 42px;
+        height: 24px;
+        border-radius: 12px;
+        background: #cfd6dd;
+        transition: background 0.18s ease;
+    }
+
+    &__switch-thumb {
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 18px;
+        height: 18px;
+        border-radius: 50%;
+        background: #fff;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+        transition: transform 0.18s ease;
+    }
+
+    &__switch input:checked + &__switch-track {
+        background: #2b6cb0;
+    }
+
+    &__switch input:checked + &__switch-track &__switch-thumb {
+        transform: translateX(18px);
+    }
+
+    // Collection (1:N) editor
+    &__collection {
+        margin: 8px 0 16px;
+        padding-top: 8px;
+        border-top: 1px solid #eef1f4;
+    }
+
+    &__collection-title {
+        margin: 0 0 10px;
+        font-size: 15px;
+        font-weight: font-weight('bold');
+        color: #2b3a4a;
+    }
+
+    &__collection-table {
+        width: 100%;
+        table-layout: fixed;
+        border-collapse: collapse;
+        margin-bottom: 10px;
+
+        th {
+            text-align: left;
+            padding: 8px 10px;
+            background: #f7f9fb;
+            border: 1px solid #e4e9ee;
+            font-size: 12.5px;
+            color: #5c6b7a;
+        }
+
+        td {
+            padding: 6px 10px;
+            border: 1px solid #e4e9ee;
+            vertical-align: middle;
+        }
+
+        // Controls fill the full width of their cell.
+        td .form-control,
+        td input,
+        td .select2-container {
+            width: 100% !important;
+            box-sizing: border-box;
+        }
+    }
+
+    &__collection-actions {
+        width: 48px;
+        text-align: center;
+    }
+
+    &__collection-col--center {
+        text-align: center;
+    }
+
+    &__action--danger {
+        color: #8a98a6;
+
+        &:hover {
+            color: #c0392b;
+        }
+    }
+
+    &__add-row {
+        margin-top: 2px;
+    }
+
+    &__actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 8px;
+        padding: 14px 24px;
+        border-top: 1px solid #eef1f4;
+    }
+}
+
+// --- Reusable generic dialog (Dialog widget) --------------------------------
+
+.aaxis-dialog {
+    position: fixed;
+    inset: 0;
+    z-index: 1050;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+
+    &__backdrop {
+        position: absolute;
+        inset: 0;
+        background: rgba(17, 24, 33, 0.45);
+        opacity: 0;
+        transition: opacity 0.18s ease;
+    }
+
+    &__dialog {
+        position: relative;
+        margin: 8vh 16px;
+        width: 560px;
+        min-width: 360px;
+        min-height: 200px;
+        max-width: calc(100vw - 32px);
+        max-height: 84vh;
+        display: flex;
+        flex-direction: column;
+        background: #fff;
+        border-radius: 8px;
+        box-shadow: 0 20px 60px rgba(17, 24, 33, 0.3);
+        opacity: 0;
+        transform: translateY(-10px);
+        transition: opacity 0.18s ease, transform 0.18s ease;
+        resize: both;
+        overflow: hidden;
+    }
+
+    &.is-open &__backdrop {
+        opacity: 1;
+    }
+
+    &.is-open &__dialog {
+        opacity: 1;
+        transform: translateY(0);
+    }
+
+    &__head {
+        position: relative;
+        padding: 18px 24px 12px;
+        border-bottom: 1px solid #eef1f4;
+    }
+
+    &__title {
+        margin: 0;
+        font-size: 18px;
+        font-weight: font-weight('bold');
+        color: #1b3a5b;
+    }
+
+    &__subtitle {
+        margin: 4px 0 0;
+        font-size: 13px;
+        color: #8a98a6;
+    }
+
+    &__close {
+        position: absolute;
+        top: 14px;
+        right: 16px;
+        width: 28px;
+        height: 28px;
+        border: 0;
+        border-radius: 4px;
+        background: transparent;
+        color: #8a98a6;
+        font-size: 16px;
+        cursor: pointer;
+
+        &:hover {
+            background: #f0f3f6;
+            color: #2b3a4a;
+        }
+    }
+
+    &__body {
+        padding: 16px 24px;
+        overflow-y: auto;
+    }
+}
+
+// Auto-fading "copied" toast (top-right corner)
+.aaxis-grid__toast {
+    position: fixed;
+    top: 16px;
+    right: 16px;
+    z-index: 1100;
+    padding: 10px 16px;
+    background: #2c7a3f;
+    color: #fff;
+    font-size: 13px;
+    border-radius: 4px;
+    box-shadow: 0 6px 20px rgba(17, 24, 33, 0.25);
+    opacity: 0;
+    transform: translateY(-8px);
+    transition: opacity 0.25s ease, transform 0.25s ease;
+    pointer-events: none;
+
+    &.is-visible {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+
+// Match Select2 height to inputs inside generic dialogs.
+.aaxis-dialog {
+    .select2-container {
+        width: 100% !important;
+        box-sizing: border-box;
+    }
+
+    .select2-container .select2-choice {
+        min-height: 36px;
+        align-items: center;
+        box-sizing: border-box;
+    }
+
+    input.form-control,
+    select.form-control {
+        height: 36px;
+    }
+}
+

@@ -1,0 +1,11 @@
+acls:
+    # Action capability gating the shared grid-preference endpoints.
+    aaxis_common:
+        label: aaxis.common.acl.aaxis_common.label
+        description: aaxis.common.acl.aaxis_common.description
+        type: action
+        group_name: ""
+        category: "aaxis_common"
+        bindings:
+            - { class: Aaxis\Bundle\CommonBundle\Controller\GridPreferenceController }
+            - { class: Aaxis\Bundle\CommonBundle\Controller\ConnectionTestController }

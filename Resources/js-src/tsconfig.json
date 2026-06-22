@@ -1,0 +1,14 @@
+{
+    "extends": "./tsconfig.base.json",
+    "compilerOptions": {
+        "rootDir": ".",
+        "outDir": "../public/js",
+        "declaration": true
+    },
+    "include": [
+        "**/*.ts"
+    ],
+    "exclude": [
+        "../public/js"
+    ]
+}

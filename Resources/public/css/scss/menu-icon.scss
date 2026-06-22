@@ -1,0 +1,19 @@
+/*
+ * "A" letter glyph for the shared "Aaxis" application menu group.
+ *
+ * The application menu renders the icon as:
+ *   <span class="aaxis-menu-icon menu-icon" aria-hidden="true"></span>
+ * The bundled Font Awesome (4.7) has no letter icons, so the glyph is drawn
+ * from the typographic letter "A" instead of an icon font.
+ */
+.aaxis-menu-icon {
+    display: inline-block;
+    font-style: normal;
+    font-weight: 700;
+    line-height: 1;
+    text-align: center;
+
+    &::before {
+        content: 'A';
+    }
+}

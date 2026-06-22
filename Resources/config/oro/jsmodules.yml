@@ -1,0 +1,4 @@
+dynamic-imports:
+    aaxiscommon:
+        # Shared "Test it" connection-test control rendered on the tools' System Configuration pages.
+        - aaxiscommon/js/app/components/connection-test-component

@@ -1,0 +1,4 @@
+aaxis_common:
+    resource: "@AaxisCommonBundle/Controller"
+    type: attribute
+    prefix: /aaxis/common
