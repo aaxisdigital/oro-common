@@ -129,11 +129,54 @@
         &--danger:hover {
             color: #c0392b;
         }
+
+        &--disabled,
+        &--disabled:hover {
+            color: #c7ced6;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
     }
 
     &__empty {
         padding: 24px 0;
         text-align: center;
+    }
+
+    // While the grid is waiting for its first server response, reserve enough height for the
+    // overlay so it has a visible area to cover (the table body is still empty at this point).
+    &--loading {
+        min-height: 240px;
+    }
+
+    // Loading overlay — covers the grid (below the floating pager, z-index 40) with a centered
+    // spinner until the first setRows() call.
+    &__overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        z-index: 30;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 12px;
+        background: rgba(255, 255, 255, 0.72);
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    &__overlay-spinner {
+        font-size: 22px;
+        color: #2b6cb0;
+    }
+
+    &__overlay-text {
+        color: #4a5568;
+        font-size: 14px;
     }
 
     // Pagination toolbar — floating, centered at the bottom of the page.

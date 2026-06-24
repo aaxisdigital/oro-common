@@ -6,6 +6,7 @@ aaxis:
             failed: 'The test request failed.'
         grid:
             empty: 'No records.'
+            loading: 'Loading…'
             actions: 'Actions'
             per_page: 'Per page'
             page_info: '{{ start }}-{{ end }} of {{ total }}'

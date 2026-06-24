@@ -35,6 +35,13 @@ export interface GridAction {
     label: string;
     icon: string;
     variant?: 'default' | 'danger';
+    /**
+     * Per-row predicate: when it returns true the action button is rendered disabled (greyed,
+     * non-clickable) for that row. Use {@see disabledTitle} to explain why.
+     */
+    disabled?: (row: any) => boolean;
+    /** Tooltip shown on the action button when {@see disabled} returns true for the row. */
+    disabledTitle?: string;
 }
 
 export interface DataGridOptions {
@@ -94,6 +101,7 @@ export default class DataGrid {
     private $popover: any = null;
     private $pager: any = null;
     private $colMenu: any = null;
+    private $overlay: any = null;
     private popoverCol: GridColumn | null = null;
     private readonly onDocClick: (e: any) => void;
 
@@ -160,8 +168,12 @@ export default class DataGrid {
 
         this.$popover = $('<div/>', {'class': 'aaxis-grid__popover', hidden: 'hidden'});
         this.$colMenu = $('<div/>', {'class': 'aaxis-grid__colmenu', hidden: 'hidden'});
+        this.$overlay = $('<div/>', {'class': 'aaxis-grid__overlay'}).append(
+            $('<span/>', {'class': 'aaxis-grid__overlay-spinner fa fa-spinner fa-spin', 'aria-hidden': 'true'}),
+            $('<span/>', {'class': 'aaxis-grid__overlay-text', text: __('aaxis.common.grid.loading')})
+        );
         this.$pager = this.buildPager();
-        this.$root.append(this.$pager, $table, this.$popover, this.$colMenu);
+        this.$root.append(this.$pager, $table, this.$popover, this.$colMenu, this.$overlay);
         $container.empty().append(this.$root);
 
         this.$root.on('click', 'th[data-sort-key]', (e: any) => this.onHeaderClick(e));
@@ -187,8 +199,25 @@ export default class DataGrid {
         $(document).on('click.aaxisGrid', this.onDocClick);
 
         this.renderBody();
+        this.updateOverlay();
         this.loadPreferences();
         return this;
+    }
+
+    /**
+     * Shows a loading overlay over the grid until the first {@see setRows} call, so a slow server
+     * response leaves a clear "Loading…" state rather than a blank table (or a misleading empty one).
+     */
+    private updateOverlay(): void {
+        if (!this.$overlay || !this.$root) {
+            return;
+        }
+        this.$root.toggleClass('aaxis-grid--loading', !this.loaded);
+        if (this.loaded) {
+            this.$overlay.attr('hidden', 'hidden');
+        } else {
+            this.$overlay.removeAttr('hidden');
+        }
     }
 
     private renderHead(): void {
@@ -263,6 +292,7 @@ export default class DataGrid {
         this.rows = rows || [];
         this.loaded = true;
         this.renderBody();
+        this.updateOverlay();
     }
 
     // --- Header --------------------------------------------------------------
@@ -685,8 +715,8 @@ export default class DataGrid {
         }
         this.$tbody.empty();
 
-        // Until the first setRows() call, keep the body blank (no "empty" message) so the
-        // consumer's loading indicator is shown instead of a misleading "no records" state.
+        // Until the first setRows() call, keep the body blank (no "empty" message): the loading
+        // overlay (see updateOverlay) covers the grid instead of a misleading "no records" state.
         if (!this.loaded) {
             this.updatePager(0, 0, 0);
             return;
@@ -938,15 +968,21 @@ export default class DataGrid {
         if (this.actions.length) {
             const $actions = $('<td/>', {'class': 'aaxis-grid__col-actions'});
             this.actions.forEach(action => {
-                $actions.append($('<button/>', {
+                const isDisabled = !!action.disabled?.(row);
+                const $btn = $('<button/>', {
                     type: 'button',
                     'class': 'aaxis-grid__action'
-                        + (action.variant === 'danger' ? ' aaxis-grid__action--danger' : ''),
+                        + (action.variant === 'danger' ? ' aaxis-grid__action--danger' : '')
+                        + (isDisabled ? ' aaxis-grid__action--disabled' : ''),
                     'data-action': action.key,
                     'data-id': row[this.idKey],
-                    title: action.label,
+                    title: isDisabled ? (action.disabledTitle || action.label) : action.label,
                     'aria-label': action.label
-                }).append($('<span/>', {'class': 'fa ' + action.icon, 'aria-hidden': 'true'})));
+                }).append($('<span/>', {'class': 'fa ' + action.icon, 'aria-hidden': 'true'}));
+                if (isDisabled) {
+                    $btn.prop('disabled', true).attr('aria-disabled', 'true');
+                }
+                $actions.append($btn);
             });
             $tr.append($actions);
         }

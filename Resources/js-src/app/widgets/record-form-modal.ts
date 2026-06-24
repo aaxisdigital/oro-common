@@ -38,6 +38,32 @@ export interface FormField {
     emptyText?: string;
 }
 
+/**
+ * Imperative handle passed to {@see RecordFormOptions.onFieldChange} so a consumer can react to a
+ * field change — typically to switch a field between control types or load dependent options.
+ */
+export interface FieldChangeApi {
+    /** Current values of all top-level fields (collections collected as arrays of row objects). */
+    values(): Record<string, any>;
+    /** Replaces the form's field schema and re-renders the body in place, preserving entered values. */
+    rebuildFields(fields: FormField[]): void;
+    /**
+     * For a change that originated inside a collection row: sets another control's value in the
+     * SAME row (e.g. auto-fill a sibling). No-op for top-level changes.
+     */
+    setRowValue(key: string, value: any): void;
+}
+
+export interface FieldChangeContext {
+    /** The changed field's key (the sub-field key when the change is inside a collection). */
+    key: string;
+    /** The changed control's current value. */
+    value: any;
+    /** When the change originates inside a collection, that collection's key; otherwise undefined. */
+    collectionKey?: string;
+    api: FieldChangeApi;
+}
+
 export interface RecordFormOptions {
     title: string;
     subtitle?: string;
@@ -48,6 +74,13 @@ export interface RecordFormOptions {
     values?: Record<string, any>;
     submitLabel?: string;
     onSubmit: (values: Record<string, any>) => Promise<void> | void;
+    /**
+     * Called when any field's control fires a `change` (selects, checkboxes, and text inputs on
+     * blur). Use the supplied {@see FieldChangeApi} to morph the form — e.g. swap a text field for
+     * a combobox, or auto-fill a sibling. Not fired for programmatic value changes made through the
+     * API itself.
+     */
+    onFieldChange?: (ctx: FieldChangeContext) => void;
 }
 
 /**
@@ -61,8 +94,11 @@ export default class RecordFormModal {
     private readonly opts: RecordFormOptions;
     private $modal: any = null;
     private $alert: any = null;
+    private $body: any = null;
     private saving = false;
     private selects: any[] = [];
+    /** Set while the widget changes a control's value programmatically, to mute onFieldChange. */
+    private suppressChange = false;
 
     constructor(options: RecordFormOptions) {
         this.opts = options;
@@ -81,6 +117,7 @@ export default class RecordFormModal {
         this.$modal.on('click', '[data-role="add-row"]', (e: any) => this.onAddRow(e));
         this.$modal.on('click', '[data-role="remove-row"]', (e: any) => this.onRemoveRow(e));
         this.$modal.find('[data-role="form"]').on('submit', (e: any) => this.onSubmit(e));
+        this.$modal.find('[data-role="form"]').on('change', '[data-field]', (e: any) => this.handleFieldChange(e));
         $(document).on('keydown.aaxisRecordForm', (e: any) => {
             if (e.key === 'Escape') {
                 this.close();
@@ -169,7 +206,31 @@ export default class RecordFormModal {
         this.$alert = $('<div/>', {'class': 'aaxis-rfm__alert', role: 'alert', hidden: 'hidden'});
         $form.append(this.$alert);
 
-        const $bodyWrap = $('<div/>', {'class': 'aaxis-rfm__body'});
+        this.$body = $('<div/>', {'class': 'aaxis-rfm__body'});
+        this.renderBody();
+        $form.append(this.$body);
+
+        const $actions = $('<div/>', {'class': 'aaxis-rfm__actions'});
+        $actions.append(
+            $('<button/>', {type: 'button', 'class': 'btn aaxis-rfm__cancel', 'data-role': 'cancel', text: __('Cancel')}),
+            $('<button/>', {
+                type: 'submit', 'class': 'btn btn-primary aaxis-rfm__submit', 'data-role': 'submit',
+                text: this.opts.submitLabel || __('aaxis.common.grid.submit')
+            })
+        );
+        $form.append($actions);
+
+        $dialog.append($form);
+        $modal.append($dialog);
+        return $modal;
+    }
+
+    /**
+     * (Re)renders the field controls into {@see $body} from the current `opts.fields`/`opts.values`.
+     * Safe to call repeatedly — used both on first build and on {@see rebuildFields}.
+     */
+    private renderBody(): void {
+        this.$body.empty();
         const values = this.opts.values || {};
         const fields = this.opts.fields;
         for (let i = 0; i < fields.length;) {
@@ -185,29 +246,95 @@ export default class RecordFormModal {
                 if (group.length > 1) {
                     const $row = $('<div/>', {'class': 'aaxis-rfm__row'});
                     group.forEach(f => $row.append(this.buildField(f, values)));
-                    $bodyWrap.append($row);
+                    this.$body.append($row);
                     i = j;
                     continue;
                 }
             }
-            $bodyWrap.append(this.buildField(field, values));
+            this.$body.append(this.buildField(field, values));
             i++;
         }
-        $form.append($bodyWrap);
+    }
 
-        const $actions = $('<div/>', {'class': 'aaxis-rfm__actions'});
-        $actions.append(
-            $('<button/>', {type: 'button', 'class': 'btn aaxis-rfm__cancel', 'data-role': 'cancel', text: __('Cancel')}),
-            $('<button/>', {
-                type: 'submit', 'class': 'btn btn-primary aaxis-rfm__submit', 'data-role': 'submit',
-                text: this.opts.submitLabel || __('aaxis.common.grid.submit')
-            })
-        );
-        $form.append($actions);
+    // --- Reactivity (onFieldChange) ------------------------------------------
 
-        $dialog.append($form);
-        $modal.append($dialog);
-        return $modal;
+    private handleFieldChange(event: any): void {
+        if (this.suppressChange || !this.opts.onFieldChange) {
+            return;
+        }
+        const $control = $(event.currentTarget);
+        const key = String($control.attr('data-field'));
+        const $collection = $control.closest('[data-collection]');
+        const collectionKey = $collection.length ? String($collection.attr('data-collection')) : undefined;
+        const $row = $control.closest('.aaxis-rfm__collection-row');
+        this.opts.onFieldChange({
+            key,
+            value: this.readControlEl($control),
+            collectionKey,
+            api: {
+                values: () => this.collectValues(),
+                rebuildFields: (fields: FormField[]) => this.rebuildFields(fields),
+                setRowValue: (k: string, v: any) => this.setRowValue($row, k, v)
+            }
+        });
+    }
+
+    /** Reads a control's value inferring its kind from the DOM (checkbox / number / text-or-select). */
+    private readControlEl($control: any): any {
+        if (!$control || $control.length === 0) {
+            return null;
+        }
+        if ($control.is(':checkbox')) {
+            return $control.is(':checked');
+        }
+        if ($control.attr('type') === 'number') {
+            const raw = String($control.val() || '').trim();
+            return raw === '' ? null : Number(raw);
+        }
+        return String($control.val() || '').trim();
+    }
+
+    /** Replaces the field schema and re-renders the body, preserving the values entered so far. */
+    private rebuildFields(fields: FormField[]): void {
+        this.opts.values = this.collectValues();
+        this.opts.fields = fields;
+        this.disposeSelects();
+        this.renderBody();
+        this.enhanceSelects(this.$body);
+    }
+
+    /** Sets a sibling control's value within a collection row without re-firing onFieldChange. */
+    private setRowValue($row: any, key: string, value: any): void {
+        if (!$row || $row.length === 0) {
+            return;
+        }
+        const $control = $row.find('[data-field="' + key + '"]').first();
+        if ($control.length === 0) {
+            return;
+        }
+        this.suppressChange = true;
+        try {
+            if ($control.is(':checkbox')) {
+                $control.prop('checked', !!value).trigger('change');
+            } else {
+                // .trigger('change') keeps an enhanced Select2 in sync; suppressChange mutes our own
+                // delegated handler so this programmatic set doesn't recurse.
+                $control.val(value == null ? '' : String(value)).trigger('change');
+            }
+        } finally {
+            this.suppressChange = false;
+        }
+    }
+
+    private disposeSelects(): void {
+        this.selects.forEach(view => {
+            try {
+                view.dispose();
+            } catch (e) {
+                // ignore
+            }
+        });
+        this.selects = [];
     }
 
     private buildField(field: FormField, values: Record<string, any>): any {
@@ -396,6 +523,24 @@ export default class RecordFormModal {
                     this.$modal.find('[data-role="submit"]').prop('disabled', false);
                 }
             });
+    }
+
+    /**
+     * Collects the current values of all top-level fields (collections as arrays of row objects),
+     * without validation. Top-level controls are scoped to their `.aaxis-rfm__field` wrappers so a
+     * collection sub-field sharing a key (e.g. `name`) is never mistaken for the top-level one.
+     */
+    private collectValues(): Record<string, any> {
+        const values: Record<string, any> = {};
+        this.opts.fields.forEach(field => {
+            if (field.type === 'collection') {
+                values[field.key] = this.collectCollection(field);
+                return;
+            }
+            const $control = this.$body.find('.aaxis-rfm__field [data-field="' + field.key + '"]').first();
+            values[field.key] = this.readControl(field, $control);
+        });
+        return values;
     }
 
     private collectCollection(field: FormField): any[] {
