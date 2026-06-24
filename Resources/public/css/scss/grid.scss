@@ -284,11 +284,6 @@
         gap: 6px;
     }
 
-    // Hidden column cells/headers
-    &__cell--hidden {
-        display: none;
-    }
-
     // Column show/hide menu (anchored to the gear button, fixed positioning)
     &__colmenu {
         position: fixed;

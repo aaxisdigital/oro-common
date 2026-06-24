@@ -138,6 +138,16 @@ export default class DataGrid {
         return ordered;
     }
 
+    /**
+     * Columns actually rendered into the table, in display order. Hidden columns are omitted from
+     * the DOM entirely rather than rendered and `display:none`-d: under `table-layout: fixed` a
+     * hidden cell still claims an equal column share, which then collapses to zero width and leaves
+     * dead space on the right. Skipping them lets the visible columns fill the full table width.
+     */
+    private visibleColumns(): GridColumn[] {
+        return this.orderedColumns().filter(col => this.hiddenColumns[col.key] !== true);
+    }
+
     /** Renders the grid into the given container (replaces its content). */
     mount($container: any): this {
         this.$root = $('<div/>', {'class': 'aaxis-grid'});
@@ -177,7 +187,6 @@ export default class DataGrid {
         $(document).on('click.aaxisGrid', this.onDocClick);
 
         this.renderBody();
-        this.applyColumnVisibility();
         this.loadPreferences();
         return this;
     }
@@ -254,14 +263,13 @@ export default class DataGrid {
         this.rows = rows || [];
         this.loaded = true;
         this.renderBody();
-        this.applyColumnVisibility();
     }
 
     // --- Header --------------------------------------------------------------
 
     private buildHeadRow(): any {
         const $tr = $('<tr/>');
-        this.orderedColumns().forEach(col => {
+        this.visibleColumns().forEach(col => {
             const sortable = col.sortable !== false;
             const $th = $('<th/>', {'data-col-key': col.key});
             if (col.width) {
@@ -686,7 +694,7 @@ export default class DataGrid {
 
         const all = this.filteredSortedRows();
         const total = all.length;
-        const span = this.columns.length + (this.actions.length ? 1 : 0);
+        const span = this.visibleColumns().length + (this.actions.length ? 1 : 0);
 
         if (total === 0) {
             this.$tbody.append($('<tr/>').append(
@@ -708,20 +716,9 @@ export default class DataGrid {
 
         pageRows.forEach(row => this.$tbody.append(this.renderRow(row)));
         this.updatePager(total, start + 1, start + pageRows.length);
-        this.applyColumnVisibility();
     }
 
     // --- Column visibility / settings ----------------------------------------
-
-    private applyColumnVisibility(): void {
-        if (!this.$root) {
-            return;
-        }
-        this.columns.forEach(col => {
-            const hidden = this.hiddenColumns[col.key] === true;
-            this.$root.find('[data-col-key="' + col.key + '"]').toggleClass('aaxis-grid__cell--hidden', hidden);
-        });
-    }
 
     /** Opens (or closes) the column show/hide + reorder menu, anchored to the given element. */
     toggleColumnSettings(anchorEl: any): void {
@@ -768,7 +765,8 @@ export default class DataGrid {
         const $cb = $(event.currentTarget);
         const key = String($cb.attr('data-col-toggle'));
         this.hiddenColumns[key] = !$cb.is(':checked');
-        this.applyColumnVisibility();
+        this.renderHead();
+        this.renderBody();
         this.savePreferences();
     }
 
@@ -814,7 +812,6 @@ export default class DataGrid {
             this.columnOrder = newOrder;
             this.renderHead();
             this.renderBody();
-            this.applyColumnVisibility();
             this.savePreferences();
         }
     }
@@ -856,7 +853,6 @@ export default class DataGrid {
                 }
                 this.renderHead();
                 this.renderBody();
-                this.applyColumnVisibility();
             })
             .catch(() => { /* preferences are best-effort */ });
     }
@@ -896,7 +892,7 @@ export default class DataGrid {
 
     private renderRow(row: any): any {
         const $tr = $('<tr/>');
-        this.orderedColumns().forEach(col => {
+        this.visibleColumns().forEach(col => {
             const $td = $('<td/>', {'data-col-key': col.key});
             if (col.type === 'number' || col.type === 'boolean') {
                 $td.addClass('aaxis-grid__col--center');
