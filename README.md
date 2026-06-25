@@ -133,7 +133,7 @@ configured, so `oro/platform` resolves):
 ```jsonc
 // composer.json
 "repositories": {
-    "aaxis-common": { "type": "vcs", "url": "git@github.com:aaxisdigital/oro-common.git" }
+    "aaxis-common": { "type": "vcs", "url": "https://github.com/aaxisdigital/oro-common.git" }
 }
 ```
 
