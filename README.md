@@ -28,7 +28,8 @@ Reusable classes used by every Aaxis bundle that ships TypeScript:
 
 > **⚠️ Required: the TypeScript compiler must be installed in the project's `node_modules`.**
 > The compiler invokes `node_modules/.bin/tsc`, so the consuming project **must** have `typescript`
-> as a (dev) dependency — install it with `npm i -D typescript` (or `pnpm add -D typescript`).
+> as a (dev) dependency — see the [Installation prerequisite](#prerequisite--typescript-compiler-node-toolchain)
+> below for the exact OOTB-Oro pnpm-workspace steps.
 > The Aaxis bundles ship **only** their `.ts` sources; the emitted `.js` is generated at
 > asset-build time and is **not** committed, so there is no pre-built JavaScript to fall back on.
 > If `tsc` is missing (or compilation fails), the asset build **fails loudly** instead of silently
@@ -144,13 +145,51 @@ composer require aaxisdigital/oro-common:7.0.*
 The bundle is auto-registered via `Resources/config/oro/bundles.yml` (the Oro kernel scans `vendor/`
 and `src/` — no `AppKernel` edit needed).
 
-**Prerequisite — install the TypeScript compiler** (see "TypeScript build pipeline" above). The
-emitted `.js` is **not** committed; it is generated on `oro:assets:build`, which requires `tsc` and
-will fail otherwise:
+### Prerequisite — TypeScript compiler (Node toolchain)
 
-```bash
-npm i -D typescript        # or: pnpm add -D typescript  — provides node_modules/.bin/tsc
-```
+The bundle ships only its `.ts` sources; the emitted `.js` is **not** committed and is generated on
+`oro:assets:build`, which invokes `node_modules/.bin/tsc` and **fails the build** if it is missing
+(see "TypeScript build pipeline" above). A stock Oro installation does **not** include TypeScript, so
+on top of `composer require` you must add it to the project's Node toolchain.
+
+Oro uses a **pnpm workspace**, so make these changes at the project root:
+
+1. Add TypeScript to the root `package.json` `devDependencies`:
+
+   ```jsonc
+   // package.json
+   "devDependencies": {
+       "typescript": "^6.0.3"
+   }
+   ```
+
+2. Allow the build scripts pnpm blocks by default (pnpm refuses to run dependencies' install
+   scripts unless they are explicitly allow-listed). Add to the root `pnpm-workspace.yaml`:
+
+   ```yaml
+   # pnpm-workspace.yaml
+   allowBuilds:
+     '@oroinc/codemirror-expression-editor': true
+     '@parcel/watcher': true
+     '@swc/core': true
+     core-js: true
+     core-js-pure: true
+     edgedriver: true
+     esbuild: true
+     geckodriver: true
+     vue-demi: true
+     vue-echarts: true
+   ```
+
+3. Install, which provides `node_modules/.bin/tsc` and regenerates the lock file:
+
+   ```bash
+   pnpm install
+   ```
+
+> **Commit the regenerated lock files.** `composer require` (step above) updates `composer.lock`, and
+> `pnpm install` updates `pnpm-lock.yaml`. Both reflect the new dependencies and **must be committed**
+> so other environments and CI resolve the exact same versions.
 
 After install/update:
 
