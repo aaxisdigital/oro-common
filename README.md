@@ -195,7 +195,8 @@ After install/update:
 
 ```bash
 php bin/console cache:clear --no-interaction
-php bin/console oro:migration:load --force                 # creates aaxis_grid_preference (+ admin ACL)
+php bin/console oro:migration:load --force                 # creates aaxis_grid_preference
+php bin/console oro:migration:data:load --no-interaction   # grants the aaxis_common ACL to the Administrator role
 php bin/console oro:assets:build --no-interaction          # compiles TypeScript (requires tsc) + SCSS/JS bundles
 php bin/console oro:translation:load --no-interaction
 php bin/console oro:translation:rebuild-cache --no-interaction

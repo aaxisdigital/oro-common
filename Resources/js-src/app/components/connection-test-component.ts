@@ -6,6 +6,10 @@ import BaseComponent from 'oroui/js/app/components/base/component';
 interface ConnectionTestOptions {
     _sourceElement: any;
     tool: string;
+    // True only for tools that expose editable connection settings (DSN/credentials) in the config
+    // form. The "save first" hint is shown only then — tools that test a fixed app connection
+    // (database, elastic, queue_monitor) have nothing to save, so the hint would be misleading.
+    editableConnection?: boolean;
 }
 
 interface TestResult {
@@ -19,6 +23,12 @@ interface TestResult {
  *
  * The component replaces its (unused) backing input with a button + result area, and calls the
  * connection-test endpoint for the configured tool. Passwords are never returned by the backend.
+ *
+ * The test deliberately runs against the *saved* configuration only — it never sends the values
+ * currently typed into the form. This avoids probing arbitrary, unsaved hosts/credentials straight
+ * from the UI; the user must save first to test new values. For tools that expose editable
+ * connection settings (`editableConnection: true`) a hint next to the button says so; tools that
+ * test a fixed app connection (database, elastic, queue_monitor) omit it — there's nothing to save.
  */
 class ConnectionTestComponent extends BaseComponent {
     private $el!: any;
@@ -40,7 +50,15 @@ class ConnectionTestComponent extends BaseComponent {
             text: __('aaxis.common.connection_test.button')
         });
         this.$result = $('<div/>', {'class': 'aaxis-conn-test__result', 'aria-live': 'polite'});
-        $wrap.append(this.$button, this.$result);
+        $wrap.append(this.$button);
+        // Only tools with editable connection settings have unsaved values worth warning about.
+        if (options.editableConnection) {
+            $wrap.append($('<div/>', {
+                'class': 'aaxis-conn-test__hint',
+                text: __('aaxis.common.connection_test.saved_only_hint')
+            }));
+        }
+        $wrap.append(this.$result);
         this.$el.after($wrap);
 
         this.$button.on('click.aaxisConnTest', this.onTest.bind(this));
@@ -55,9 +73,9 @@ class ConnectionTestComponent extends BaseComponent {
 
         const url = routing.generate('aaxis_common_connection_test', {tool: this.tool});
 
-        // Send the values currently entered in the form so the test works in edit mode
-        // (before saving). The backend uses these overrides when present.
-        $.ajax({url, method: 'GET', data: {overrides: this.collectOverrides()}})
+        // Always test against the saved configuration; never send unsaved form input (see the
+        // class doc). The backend uses its persisted settings when no overrides are provided.
+        $.ajax({url, method: 'GET'})
             .done((response: TestResult) => this.render(response))
             .fail((jqXhr: any) => {
                 const response = (jqXhr.responseJSON as TestResult) || {
@@ -67,39 +85,6 @@ class ConnectionTestComponent extends BaseComponent {
                 this.render(response);
             })
             .always(() => this.$button.prop('disabled', false));
-    }
-
-    /**
-     * Collects the sibling config field values for this tool from the form, keyed by their short
-     * name (e.g. "url", "user", "pass", "name"), so a test can run against unsaved input.
-     *
-     * Field names are derived from this control's own name (e.g. "aaxis_tools[bucket_browser_test][value]")
-     * so it does not depend on the form's id scheme.
-     */
-    private collectOverrides(): Record<string, string> {
-        const overrides: Record<string, string> = {};
-        const myName = String(this.$el.attr('name') || '');
-        const match = myName.match(/^(.*\[)[^\]]*\]\[value\]$/);
-        if (!match) {
-            return overrides;
-        }
-        const prefix = match[1] + this.tool + '_'; // e.g. "aaxis_tools[bucket_browser_"
-        const suffix = '][value]';
-        const $form = this.$el.closest('form');
-        const $scope = $form.length ? $form : $(document);
-
-        $scope.find('[name^="' + prefix + '"][name$="' + suffix + '"]').each((_index: number, el: any) => {
-            const name = String(el.getAttribute('name') || '');
-            const key = name.substring(prefix.length, name.length - suffix.length);
-            if (key === '' || key === 'test') {
-                return;
-            }
-            const $field = $(el);
-            overrides[key] = $field.is(':checkbox')
-                ? ($field.is(':checked') ? '1' : '0')
-                : String($field.val() ?? '');
-        });
-        return overrides;
     }
 
     private render(response: TestResult): void {

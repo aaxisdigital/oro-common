@@ -4,6 +4,7 @@ aaxis:
             button: 'Test it'
             running: 'Testing...'
             failed: 'The test request failed.'
+            saved_only_hint: 'Tests use the saved configuration. Save your changes first to test them.'
         grid:
             empty: 'No records.'
             loading: 'Loading…'

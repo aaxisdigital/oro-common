@@ -7,7 +7,6 @@ namespace Aaxis\Bundle\CommonBundle\Controller;
 use Aaxis\Bundle\CommonBundle\Connection\ConnectionTestRegistry;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
-use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\Routing\Attribute\Route;
 
 /**
@@ -25,11 +24,12 @@ class ConnectionTestController extends AbstractController
         options: ['expose' => true],
         methods: ['GET']
     )]
-    public function testAction(string $tool, Request $request): JsonResponse
+    public function testAction(string $tool): JsonResponse
     {
-        // Values entered in the (possibly unsaved) config form, so the test runs in edit mode.
-        $overrides = $request->query->all('overrides');
-        $result = $this->container->get(ConnectionTestRegistry::class)->test($tool, $overrides);
+        // Tests run against the saved configuration only — we deliberately ignore any request-supplied
+        // overrides so the endpoint can't be used to probe arbitrary, unsaved hosts/credentials from
+        // the UI. Users must save their changes before testing them.
+        $result = $this->container->get(ConnectionTestRegistry::class)->test($tool, []);
 
         return new JsonResponse($result);
     }
