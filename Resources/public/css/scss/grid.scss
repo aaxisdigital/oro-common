@@ -27,8 +27,11 @@
             background: #f7f9fb;
         }
 
+        // Must stay clearly distinct from the header row (#f1f4f8, Oro's $neutral-grey-2 via the
+        // `grid` class) and the even-row zebra (#f7f9fb) — a near-identical tint made hovered rows
+        // look like the column-title row.
         tbody tr:hover {
-            background: #eef3f8;
+            background: #dbe7f5;
         }
     }
 

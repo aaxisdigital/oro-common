@@ -1,0 +1,21 @@
+# Shared top-level "Aaxis" tab in System Configuration. Feature bundles (Tools, DevTools,
+# Ontology, ...) attach their config pages under `aaxis > aaxis_general`; Oro requires config
+# fields at exactly nesting level 5, so the section level (`aaxis_general`) is mandatory.
+system_configuration:
+    groups:
+        aaxis:
+            title: aaxis.common.config.aaxis.title
+            icon: fa-cubes
+        aaxis_general:
+            title: aaxis.common.config.general.title
+
+    tree:
+        system_configuration:
+            aaxis:
+                # Below Oro's "System Configuration" tab (255), above Commerce/CRM/Marketing (0),
+                # next to app-defined tabs (which conventionally use ~100).
+                priority: 99
+                children:
+                    aaxis_general:
+                        priority: 255
+                        children: []

@@ -27,6 +27,12 @@ independent of each other. **When something is needed by two or more Aaxis bundl
 - **`aaxis_tab` menu group** (`navigation.yml`) + its `aaxis-menu-icon` glyph
   (`Resources/public/css/scss/menu-icon.scss`). Each feature bundle attaches its own sub-group under
   `aaxis_tab` (e.g. `aaxis_tools_group`, `aaxis_devtools_group`).
+- **"Aaxis" System Configuration tab** (`Resources/config/oro/system_configuration.yml`): groups
+  `aaxis` (top-level tab, priority 99 — below Oro's "System Configuration" tab at 255, above
+  Commerce/CRM/Marketing at 0) + `aaxis_general` ("General" section). Feature bundles hang their config pages under `aaxis > aaxis_general` in
+  their own `system_configuration.yml` — Oro hard-requires fields at nesting level 5
+  (tab > section > page > fieldset > fields), so the section level is not optional. Config deep
+  links use `activeGroup: 'aaxis'`, `activeSubGroup: '<page group>'`.
 - **TypeScript build pipeline** (`Build/TypeScriptCompiler`, `Command/CompileTypeScriptCommand`,
   `EventListener/CompileTypeScriptOnAssetsBuildListener`). NOT auto-wired here — each consuming bundle
   instantiates them in its own `services.yml`, pointing at its own `tsconfig.json` and command name.

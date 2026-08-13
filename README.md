@@ -19,6 +19,12 @@ Defines the top-level **`aaxis_tab`** menu node (label "Aaxis") and its **`aaxis
 (`Resources/public/css/scss/menu-icon.scss`). Each Aaxis bundle attaches its own sub-group under
 `aaxis_tab` in its own `navigation.yml`; the parent node and icon are defined here once.
 
+### Shared "Aaxis" System-Configuration tab
+Defines the top-level **Aaxis** tab in **System Configuration** and its **General** section
+(`Resources/config/oro/system_configuration.yml`, groups `aaxis` + `aaxis_general`). Each Aaxis
+bundle hangs its own config page under `aaxis > aaxis_general` in its own
+`system_configuration.yml`; the tab and section are defined here once.
+
 ### TypeScript build pipeline
 Reusable classes used by every Aaxis bundle that ships TypeScript:
 
