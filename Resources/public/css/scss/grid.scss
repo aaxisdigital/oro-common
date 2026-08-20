@@ -91,10 +91,20 @@
         }
     }
 
+    // Fallback width only — the real one is set inline per grid from its action set
+    // (DataGrid.actionsColumnWidth), because `table-layout: fixed` makes it authoritative.
     &__col-actions {
         width: 110px;
         text-align: right;
         white-space: nowrap;
+    }
+
+    // The generic `td` rule ellipsizes overflow, which for buttons means silently DISAPPEARING
+    // actions (a clipped icon looks like it was never rendered). Never truncate this cell: if a
+    // width estimate is ever short, the buttons spill visibly instead of going missing.
+    &__table td.aaxis-grid__col-actions {
+        overflow: visible;
+        text-overflow: clip;
     }
 
     &__badge {
@@ -111,7 +121,8 @@
 
         &--off {
             background: #f0f0f0;
-            color: #7a7a7a;
+            // #6b6b6b clears WCAG AA (4.68:1 on this background); the old #7a7a7a was 3.77:1.
+            color: #6b6b6b;
         }
     }
 
@@ -139,6 +150,25 @@
             cursor: not-allowed;
             pointer-events: none;
         }
+
+        // Text-pill action (GridAction.badge) — vertically centred with the icon actions.
+        &--badge {
+            vertical-align: middle;
+        }
+    }
+
+    // Short uppercase pill used by GridAction.badge (e.g. "dwl"). Distinct from __badge, which is
+    // the boolean-column on/off pill.
+    &__action-badge {
+        display: inline-block;
+        padding: 1px 5px;
+        border: 1px solid currentcolor;
+        border-radius: 3px;
+        font-size: 10px;
+        font-weight: font-weight('bold');
+        line-height: 1.4;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
     }
 
     &__empty {
@@ -430,6 +460,11 @@
         overflow: hidden;
     }
 
+    // Fixed-size variant (RecordFormOptions.resizable: false).
+    &__dialog--no-resize {
+        resize: none;
+    }
+
     &.is-open &__backdrop {
         opacity: 1;
     }
@@ -536,22 +571,75 @@
         box-sizing: border-box;
     }
 
+    // Element-qualified (higher specificity) so controls fill their field/flex cell even though
+    // Oro's admin theme gives inputs/selects/textareas a fixed width — without this, controls
+    // render ~230px wide, leaving gaps in multi-field rows and overflowing narrow cells.
+    // The theme gives every form control a bottom margin; the field owns its spacing here, and a
+    // stray 8px below the control also broke the password toggle's centering (the toggle centers on
+    // its wrapper, which the margin made 8px taller than the input).
+    input.aaxis-rfm__control,
+    select.aaxis-rfm__control,
+    textarea.aaxis-rfm__control {
+        width: 100%;
+        max-width: 100%;
+        min-width: 0;
+        margin: 0;
+    }
+
     // Single-line controls share the Select2 height so combos and inputs line up.
     input.aaxis-rfm__control,
     select.aaxis-rfm__control {
         height: 36px;
     }
 
-    // Make the Select2 combobox fill the field and match the height of text inputs.
+    // Make the Select2 combobox fill the field and match the height of text inputs. The height has
+    // to be set on the CONTAINER: Oro fixes it at 32px, so a taller inner .select2-choice only
+    // overflows the visible border instead of growing the combo. Select2 also copies the original
+    // <select>'s classes onto the container, so the theme's .form-control padding lands here and
+    // has to be dropped — the choice below owns the padding.
     .select2-container {
         width: 100% !important;
+        height: 36px;
+        margin: 0;
+        padding: 0;
         box-sizing: border-box;
     }
 
+    // Fills the container, label ellipsized with the arrow pushed to the right edge (Oro's theme
+    // lays the arrow inline after the text and gives the label generous margins, which wastes most
+    // of a narrow combo). Text indented like a .form-control so combos and inputs line up.
     .select2-container .select2-choice {
-        min-height: 36px;
+        display: flex;
         align-items: center;
+        height: 100%;
         box-sizing: border-box;
+        padding: 0 6px 0 16px;
+
+        // Oro gives the label a fixed 30px height, which pins the text to the top of the combo
+        // instead of letting it center.
+        .select2-chosen {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: auto;
+            line-height: 1.3;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .select2-arrow {
+            position: static;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            margin: 0 0 0 auto;
+            padding: 0;
+            border: 0;
+            background: none;
+            line-height: 1;
+        }
     }
 
     &__field-error {
@@ -561,6 +649,54 @@
 
         &:empty {
             display: none;
+        }
+    }
+
+    // Muted helper line under a control (FormField.hint).
+    &__hint {
+        color: #6b7a89;
+        font-size: 12px;
+    }
+
+    // Password control: the show/hide toggle overlays the input's right edge (the wrapper spans
+    // the full field so the absolutely-positioned toggle lands INSIDE the input). Flex kills the
+    // inline baseline gap, so the wrapper is exactly as tall as the input and the 50% offset
+    // centers the toggle on the input itself.
+    &__password {
+        position: relative;
+        display: flex;
+        width: 100%;
+
+        input.aaxis-rfm__control {
+            padding-right: 38px;
+        }
+    }
+
+    &__password-toggle {
+        position: absolute;
+        top: 50%;
+        right: 4px;
+        transform: translateY(-50%);
+        // Above the input WHILE FOCUSED: Oro's global input:focus rule sets z-index: 1, and since
+        // the input is a flex item of the wrapper, that z-index actually applies — without this
+        // the icon disappears exactly while the value is being edited.
+        z-index: 2;
+        display: inline-flex;
+        align-items: center;
+        line-height: 1;
+        border: 0;
+        background: none;
+        padding: 6px 8px;
+        cursor: pointer;
+        color: #6b7a89;
+
+        &:hover {
+            color: #2b3a4a;
+        }
+
+        &[disabled] {
+            color: #b6c0c9;
+            cursor: default;
         }
     }
 
@@ -676,9 +812,111 @@
     &__actions {
         display: flex;
         justify-content: flex-end;
+        align-items: center;
         gap: 8px;
         padding: 14px 24px;
         border-top: 1px solid #eef1f4;
+    }
+
+    // Busy spinner inside the submit button while onSubmit is in flight.
+    &__submit-spinner {
+        margin-right: 6px;
+    }
+
+    // Optional "Test" action: pinned to the LEFT of the Cancel/Submit pair.
+    &__test {
+        margin-right: auto;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        min-width: 0;
+    }
+
+    &__test-status {
+        font-size: 12px;
+        color: #6b7a89;
+        white-space: nowrap;
+    }
+
+    // Test outcome (overall line + per-step checklist) shown above the actions row.
+    &__test-result {
+        padding: 10px 24px 0;
+        font-size: 13px;
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    &__test-line,
+    &__test-step {
+        display: flex;
+        align-items: baseline;
+        gap: 6px;
+        margin-bottom: 4px;
+
+        &.is-ok {
+            color: #1a7f37;
+        }
+
+        &.is-fail {
+            color: #c0392b;
+        }
+    }
+
+    &__test-line {
+        font-weight: font-weight('bold');
+    }
+
+    &__test-step {
+        padding-left: 18px;
+    }
+
+    // Tab strip: one tab per field of a tabGroup (see FormField.tabGroup).
+    &__tabs {
+        margin: 8px 0 16px;
+    }
+
+    &__tab-nav {
+        display: flex;
+        gap: 2px;
+        border-bottom: 1px solid #dfe5eb;
+    }
+
+    &__tab-btn {
+        border: 0;
+        background: none;
+        padding: 8px 14px;
+        font-size: 13.5px;
+        color: #5c6b7a;
+        cursor: pointer;
+        border-bottom: 2px solid transparent;
+        margin-bottom: -1px;
+
+        &:hover {
+            color: #2b3a4a;
+        }
+
+        &.is-active {
+            color: #1b3a5b;
+            font-weight: font-weight('bold');
+            border-bottom-color: #2b6cb0;
+        }
+    }
+
+    &__tab-panel {
+        padding-top: 10px;
+
+        &[hidden] {
+            display: none;
+        }
+
+        // The tab button already names the collection — its section needs no top spacing/rule.
+        .aaxis-rfm__collection {
+            margin-top: 0;
+            padding-top: 0;
+            border-top: 0;
+        }
     }
 }
 
@@ -733,6 +971,13 @@
         position: relative;
         padding: 18px 24px 12px;
         border-bottom: 1px solid #eef1f4;
+        flex: 0 0 auto;
+    }
+
+    // Drag handle (DialogOptions.movable). user-select is off so dragging never selects the title.
+    &__head--movable {
+        cursor: move;
+        user-select: none;
     }
 
     &__title {
@@ -797,22 +1042,55 @@
 }
 
 
-// Match Select2 height to inputs inside generic dialogs.
+// Match Select2 height to inputs inside generic dialogs (same rules as the record form: the height
+// belongs on the container, and the text/arrow only center once the choice is a flex row).
 .aaxis-dialog {
+    // Select2 copies the <select>'s .form-control class onto the container, which brings the
+    // theme's padding and bottom margin with it.
     .select2-container {
         width: 100% !important;
+        height: 36px;
+        margin: 0;
+        padding: 0;
         box-sizing: border-box;
     }
 
     .select2-container .select2-choice {
-        min-height: 36px;
+        display: flex;
         align-items: center;
+        height: 100%;
         box-sizing: border-box;
+        padding: 0 6px 0 16px;
+
+        .select2-chosen {
+            flex: 1 1 auto;
+            min-width: 0;
+            height: auto;
+            line-height: 1.3;
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .select2-arrow {
+            position: static;
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            margin: 0 0 0 auto;
+            padding: 0;
+            border: 0;
+            background: none;
+            line-height: 1;
+        }
     }
 
     input.form-control,
     select.form-control {
         height: 36px;
+        margin: 0;
     }
 }
 

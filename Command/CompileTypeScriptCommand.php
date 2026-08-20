@@ -44,7 +44,18 @@ class CompileTypeScriptCommand extends Command
             return Command::SUCCESS;
         }
 
-        // This bundle ships no committed JS, so a missing toolchain is a hard error, not a skip.
+        return $this->runCompiler($io, $output);
+    }
+
+    /**
+     * Runs the compiler and reports the outcome.
+     *
+     * This bundle ships no committed JS, so a missing toolchain is a hard error, not a skip. The
+     * catch stays broad on purpose: Symfony's Process also raises \RuntimeException when the binary
+     * cannot be started, and that is just as much a build failure as a missing tsconfig.
+     */
+    private function runCompiler(SymfonyStyle $io, OutputInterface $output): int
+    {
         try {
             $process = $this->compiler->compile();
         } catch (\RuntimeException $e) {

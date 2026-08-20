@@ -3,6 +3,19 @@ import __ from 'orotranslation/js/translator';
 
 export type GridColumnType = 'text' | 'boolean' | 'number' | 'datetime' | 'json';
 
+/**
+ * Navigates to a page the way a LINK would: cmd/ctrl+click opens a new tab, a plain click
+ * replaces the current page. For grid row actions and toolbar buttons that lead somewhere —
+ * they render as <button>, so without this the browser cannot offer its native new-tab gesture.
+ */
+export function navigateTo(url: string, event?: MouseEvent | null): void {
+    if (event && (event.metaKey || event.ctrlKey)) {
+        window.open(url, '_blank', 'noopener');
+        return;
+    }
+    window.location.assign(url);
+}
+
 export interface GridColumn {
     /** Property name on the row object. */
     key: string;
@@ -33,7 +46,13 @@ export interface GridColumn {
 export interface GridAction {
     key: string;
     label: string;
-    icon: string;
+    /** Font-Awesome class (e.g. 'fa-pencil'). Ignored when {@see badge} is set. */
+    icon?: string;
+    /**
+     * Renders a short text pill instead of an icon (e.g. 'dwl') — for actions that open a named
+     * sub-tool and read better as a word than as a glyph. Takes precedence over {@see icon}.
+     */
+    badge?: string;
     variant?: 'default' | 'danger';
     /**
      * Per-row predicate: when it returns true the action button is rendered disabled (greyed,
@@ -56,7 +75,7 @@ export interface DataGridOptions {
     gridKey?: string;
     /** URL for GET/PUT of the per-user preferences (already includes the grid key). */
     preferencesUrl?: string;
-    onAction?: (actionKey: string, row: any) => void;
+    onAction?: (actionKey: string, row: any, event?: MouseEvent) => void;
 }
 
 interface ColumnFilter {
@@ -78,7 +97,7 @@ export default class DataGrid {
     private readonly actions: GridAction[];
     private readonly idKey: string;
     private readonly emptyText: string;
-    private readonly onAction?: (actionKey: string, row: any) => void;
+    private readonly onAction?: (actionKey: string, row: any, event?: MouseEvent) => void;
 
     private rows: any[] = [];
     private loaded = false;
@@ -104,6 +123,7 @@ export default class DataGrid {
     private $overlay: any = null;
     private popoverCol: GridColumn | null = null;
     private readonly onDocClick: (e: any) => void;
+    private readonly onDocKeydown: (e: any) => void;
 
     constructor(options: DataGridOptions) {
         this.columns = options.columns;
@@ -123,6 +143,7 @@ export default class DataGrid {
             }
         });
         this.onDocClick = (e: any) => this.maybeCloseFilter(e);
+        this.onDocKeydown = (e: any) => this.onEscape(e);
     }
 
     /** Columns in the user-defined display order. */
@@ -139,7 +160,7 @@ export default class DataGrid {
         });
         // Append any columns missing from the saved order.
         this.columns.forEach(col => {
-            if (this.columnOrder.indexOf(col.key) === -1) {
+            if (!this.columnOrder.includes(col.key)) {
                 ordered.push(col);
             }
         });
@@ -197,6 +218,7 @@ export default class DataGrid {
         });
         this.$pager.on('focusout', '[data-role="page-number"]', (e: any) => this.goToPageInput($(e.currentTarget).text()));
         $(document).on('click.aaxisGrid', this.onDocClick);
+        $(document).on('keydown.aaxisGrid', this.onDocKeydown);
 
         this.renderBody();
         this.updateOverlay();
@@ -265,8 +287,8 @@ export default class DataGrid {
 
     /** Jumps to the given page number (clamped to the valid range). */
     private goToPageInput(value: any): void {
-        const n = parseInt(String(value), 10);
-        if (isNaN(n)) {
+        const n = Number.parseInt(String(value), 10);
+        if (Number.isNaN(n)) {
             // Invalid input: restore the displayed page.
             this.renderBody();
             return;
@@ -329,9 +351,29 @@ export default class DataGrid {
             $tr.append($th);
         });
         if (this.actions.length) {
-            $tr.append($('<th/>', {'class': 'aaxis-grid__col-actions', text: __('aaxis.common.grid.actions')}));
+            // The table is `table-layout: fixed`, so this width is authoritative for the whole
+            // column — derive it from the actual action set instead of a constant, or a wider action
+            // (e.g. a text badge) gets clipped away by the cell's overflow.
+            $tr.append($('<th/>', {
+                'class': 'aaxis-grid__col-actions', text: __('aaxis.common.grid.actions')
+            }).css('width', this.actionsColumnWidth() + 'px'));
         }
         return $tr;
+    }
+
+    /**
+     * Width needed to show every action button on one line: ~28px per icon, and for a text badge its
+     * rendered length plus padding. Floored at 110px so icon-only grids keep their previous look.
+     */
+    private actionsColumnWidth(): number {
+        const CELL_PADDING = 24;
+        const ICON = 28;
+        const width = this.actions.reduce(
+            (sum, action) => sum + (action.badge ? action.badge.length * 8 + 26 : ICON),
+            CELL_PADDING
+        );
+
+        return Math.max(width, 110);
     }
 
     private onHeaderClick(event: any): void {
@@ -356,9 +398,11 @@ export default class DataGrid {
             const $th = $(el);
             const isActive = $th.attr('data-sort-key') === this.sortKey;
             $th.toggleClass('aaxis-grid__th--active', isActive);
-            $th.find('[data-role="sort-ind"]')
-                .attr('class', 'aaxis-grid__sort-ind fa '
-                    + (isActive ? (this.sortDir === 'asc' ? 'fa-caret-up' : 'fa-caret-down') : ''));
+            let caret = '';
+            if (isActive) {
+                caret = this.sortDir === 'asc' ? 'fa-caret-up' : 'fa-caret-down';
+            }
+            $th.find('[data-role="sort-ind"]').attr('class', 'aaxis-grid__sort-ind fa ' + caret);
         });
     }
 
@@ -393,7 +437,7 @@ export default class DataGrid {
         if (!col) {
             return;
         }
-        if (this.popoverCol && this.popoverCol.key === key && !this.$popover.attr('hidden')) {
+        if (this.popoverCol?.key === key && !this.$popover.attr('hidden')) {
             this.closeFilter();
             return;
         }
@@ -427,6 +471,27 @@ export default class DataGrid {
             this.$popover.attr('hidden', 'hidden').empty();
         }
         this.popoverCol = null;
+    }
+
+    /**
+     * Escape dismisses the filter popover / column menu, matching the click-outside behaviour —
+     * a keyboard user shouldn't have to click elsewhere to get out of an opened popover.
+     */
+    private onEscape(event: any): void {
+        if (event.key !== 'Escape') {
+            return;
+        }
+        if (this.$colMenu && !this.$colMenu.attr('hidden')) {
+            this.closeColumnSettings();
+        }
+        if (this.$popover && !this.$popover.attr('hidden')) {
+            // The filter button keeps focus so the popover can be reopened with the keyboard.
+            const key = this.popoverCol ? this.popoverCol.key : null;
+            this.closeFilter();
+            if (key !== null) {
+                this.$root.find('[data-role="filter-btn"][data-col="' + key + '"]').trigger('focus');
+            }
+        }
     }
 
     private maybeCloseFilter(event: any): void {
@@ -564,6 +629,32 @@ export default class DataGrid {
         this.renderBody();
     }
 
+    /**
+     * Applies a column filter programmatically — for deep links that arrive pre-filtered (e.g.
+     * "show the Data View for THIS entity"). Pass null to clear the column's filter. Mirrors what
+     * the filter popover does on Apply, including resetting to page 1.
+     */
+    setFilter(key: string, filter: {operator: string; value: any; jsonPath?: string} | null): void {
+        if (filter === null) {
+            delete this.filters[key];
+        } else {
+            this.filters[key] = {
+                operator: filter.operator,
+                value: filter.value,
+                jsonPath: filter.jsonPath
+            };
+        }
+        // Dismiss the popovers, like Apply/Clear do: an in-cell control that filters programmatically
+        // (e.g. the Events page's "same uuid" button) stops the click from reaching the document
+        // handler that would normally close them, and a popover left open still shows the PREVIOUS
+        // filter — its Apply would then silently overwrite what was just set.
+        this.closeFilter();
+        this.closeColumnSettings();
+        this.updateFilterIndicators();
+        this.currentPage = 1;
+        this.renderBody();
+    }
+
     private clearFilter(col: GridColumn): void {
         delete this.filters[col.key];
         this.updateFilterIndicators();
@@ -585,35 +676,52 @@ export default class DataGrid {
             return f.operator === 'equals' ? (!!rowValue === (String(f.value) === 'yes')) : true;
         }
         if (col.type === 'number') {
-            const rv = Number(rowValue);
-            const fv = Number(f.value);
-            if (isNaN(fv)) {
-                return true;
-            }
-            if (f.operator === 'gt') return rv > fv;
-            if (f.operator === 'lt') return rv < fv;
-            if (f.operator === 'equals') return rv === fv;
-            return true;
+            return DataGrid.matchNumber(rowValue, f);
         }
         if (col.type === 'datetime') {
-            const rt = this.toTime(rowValue, f.dateMode);
-            const ft = this.toTime(f.value, f.dateMode);
-            if (rt === null || ft === null) {
-                return false;
-            }
-            if (f.operator === 'after') return rt > ft;
-            if (f.operator === 'before') return rt < ft;
-            if (f.operator === 'equals') return rt === ft;
+            return this.matchDateTime(rowValue, f);
+        }
+
+        return DataGrid.matchText(String(rowValue ?? '').toLowerCase(), f);
+    }
+
+    /** Unparseable filter input matches everything, so the grid does not blank out while typing. */
+    private static matchNumber(rowValue: any, f: ColumnFilter): boolean {
+        const rv = Number(rowValue);
+        const fv = Number(f.value);
+        if (Number.isNaN(fv)) {
             return true;
         }
-        const rs = String(rowValue ?? '').toLowerCase();
+        if (f.operator === 'gt') return rv > fv;
+        if (f.operator === 'lt') return rv < fv;
+        if (f.operator === 'equals') return rv === fv;
+
+        return true;
+    }
+
+    /** A row whose date (or the filter's) cannot be parsed never matches. */
+    private matchDateTime(rowValue: any, f: ColumnFilter): boolean {
+        const rt = this.toTime(rowValue, f.dateMode);
+        const ft = this.toTime(f.value, f.dateMode);
+        if (rt === null || ft === null) {
+            return false;
+        }
+        if (f.operator === 'after') return rt > ft;
+        if (f.operator === 'before') return rt < ft;
+        if (f.operator === 'equals') return rt === ft;
+
+        return true;
+    }
+
+    /** The text operators, shared by plain-text columns and by JSON path lookups. */
+    private static matchText(haystack: string, f: ColumnFilter): boolean {
         const fs = String(f.value ?? '').toLowerCase();
         switch (f.operator) {
-            case 'contains': return rs.includes(fs);
-            case 'not_contains': return !rs.includes(fs);
-            case 'starts_with': return rs.startsWith(fs);
-            case 'ends_with': return rs.endsWith(fs);
-            case 'equals': return rs === fs;
+            case 'contains': return haystack.includes(fs);
+            case 'not_contains': return !haystack.includes(fs);
+            case 'starts_with': return haystack.startsWith(fs);
+            case 'ends_with': return haystack.endsWith(fs);
+            case 'equals': return haystack === fs;
             default: return true;
         }
     }
@@ -623,16 +731,8 @@ export default class DataGrid {
         if (f.operator === 'not_empty') {
             return resolved !== null && resolved.trim() !== '';
         }
-        const rs = (resolved ?? '').toLowerCase();
-        const fs = String(f.value ?? '').toLowerCase();
-        switch (f.operator) {
-            case 'contains': return rs.includes(fs);
-            case 'not_contains': return !rs.includes(fs);
-            case 'starts_with': return rs.startsWith(fs);
-            case 'ends_with': return rs.endsWith(fs);
-            case 'equals': return rs === fs;
-            default: return true;
-        }
+
+        return DataGrid.matchText((resolved ?? '').toLowerCase(), f);
     }
 
     /**
@@ -655,11 +755,11 @@ export default class DataGrid {
         }
         let cur = obj;
         const parts = path.split('.');
-        for (let i = 0; i < parts.length; i++) {
+        for (const part of parts) {
             if (cur === null || typeof cur !== 'object') {
                 return '';
             }
-            cur = cur[parts[i]];
+            cur = cur[part];
         }
         if (cur === null || cur === undefined) {
             return '';
@@ -672,7 +772,7 @@ export default class DataGrid {
             return null;
         }
         const d = new Date(value);
-        if (isNaN(d.getTime())) {
+        if (Number.isNaN(d.getTime())) {
             return null;
         }
         if (mode === 'date') {
@@ -836,7 +936,7 @@ export default class DataGrid {
         // Read the new order from the menu DOM.
         const newOrder: string[] = [];
         this.$colMenu.find('[data-col-key]').each((_i: number, el: any) => {
-            newOrder.push(String(el.getAttribute('data-col-key')));
+            newOrder.push(String(el.dataset.colKey));
         });
         if (newOrder.length) {
             this.columnOrder = newOrder;
@@ -850,7 +950,7 @@ export default class DataGrid {
 
     private csrf(): string {
         const name = window.location.protocol === 'https:' ? 'https-_csrf' : '_csrf';
-        const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+        const match = new RegExp('(?:^|; )' + name + '=([^;]*)').exec(document.cookie);
         return match ? decodeURIComponent(match[1]) : '';
     }
 
@@ -868,7 +968,7 @@ export default class DataGrid {
                 if (Array.isArray(state.order) && state.order.length) {
                     this.columnOrder = state.order.filter(key => this.columns.some(c => c.key === key));
                     this.columns.forEach(c => {
-                        if (this.columnOrder.indexOf(c.key) === -1) {
+                        if (!this.columnOrder.includes(c.key)) {
                             this.columnOrder.push(c.key);
                         }
                     });
@@ -877,7 +977,7 @@ export default class DataGrid {
                 (state.hidden || []).forEach(key => {
                     this.hiddenColumns[key] = true;
                 });
-                if (state.pageSize && this.pageSizeOptions.indexOf(state.pageSize) !== -1) {
+                if (state.pageSize && this.pageSizeOptions.includes(state.pageSize)) {
                     this.pageSize = state.pageSize;
                     this.$pager.find('[data-role="page-size"]').val(String(this.pageSize));
                 }
@@ -922,72 +1022,95 @@ export default class DataGrid {
 
     private renderRow(row: any): any {
         const $tr = $('<tr/>');
-        this.visibleColumns().forEach(col => {
-            const $td = $('<td/>', {'data-col-key': col.key});
-            if (col.type === 'number' || col.type === 'boolean') {
-                $td.addClass('aaxis-grid__col--center');
-            }
-            let copyText = '';
-            if (col.render) {
-                const out = col.render(row);
-                if (typeof out === 'string') {
-                    $td.text(out);
-                    copyText = out;
-                    if (out !== '') {
-                        $td.attr('title', out);
-                    }
-                } else {
-                    $td.append(out);
-                    if (col.copyValue) {
-                        copyText = String(col.copyValue(row) ?? '');
-                    }
-                }
-            } else if (col.type === 'boolean') {
-                $td.append($('<span/>', {
-                    'class': 'aaxis-grid__badge ' + (row[col.key]
-                        ? 'aaxis-grid__badge--on'
-                        : 'aaxis-grid__badge--off'),
-                    text: row[col.key] ? __('aaxis.common.grid.yes') : __('aaxis.common.grid.no')
-                }));
-            } else {
-                const text = String(row[col.key] ?? '');
-                $td.text(text);
-                copyText = text;
-                if (text !== '') {
-                    // Full value on hover.
-                    $td.attr('title', text);
-                }
-            }
-            // Click anywhere on the cell copies its value (the preview button stops propagation).
-            if (copyText !== '') {
-                $td.addClass('aaxis-grid__cell--copyable').attr('data-copy', copyText);
-            }
-            $tr.append($td);
-        });
+        this.visibleColumns().forEach(col => $tr.append(this.renderCell(col, row)));
 
         if (this.actions.length) {
-            const $actions = $('<td/>', {'class': 'aaxis-grid__col-actions'});
-            this.actions.forEach(action => {
-                const isDisabled = !!action.disabled?.(row);
-                const $btn = $('<button/>', {
-                    type: 'button',
-                    'class': 'aaxis-grid__action'
-                        + (action.variant === 'danger' ? ' aaxis-grid__action--danger' : '')
-                        + (isDisabled ? ' aaxis-grid__action--disabled' : ''),
-                    'data-action': action.key,
-                    'data-id': row[this.idKey],
-                    title: isDisabled ? (action.disabledTitle || action.label) : action.label,
-                    'aria-label': action.label
-                }).append($('<span/>', {'class': 'fa ' + action.icon, 'aria-hidden': 'true'}));
-                if (isDisabled) {
-                    $btn.prop('disabled', true).attr('aria-disabled', 'true');
-                }
-                $actions.append($btn);
-            });
-            $tr.append($actions);
+            $tr.append(this.renderActionsCell(row));
         }
 
         return $tr;
+    }
+
+    private renderCell(col: GridColumn, row: any): any {
+        const $td = $('<td/>', {'data-col-key': col.key});
+        if (col.type === 'number' || col.type === 'boolean') {
+            $td.addClass('aaxis-grid__col--center');
+        }
+
+        const copyText = this.fillCell($td, col, row);
+        // Click anywhere on the cell copies its value (the preview button stops propagation).
+        if (copyText !== '') {
+            $td.addClass('aaxis-grid__cell--copyable').attr('data-copy', copyText);
+        }
+
+        return $td;
+    }
+
+    /** Writes the cell's content and returns the text a click should copy ('' = not copyable). */
+    private fillCell($td: any, col: GridColumn, row: any): string {
+        if (col.render) {
+            const out = col.render(row);
+            if (typeof out === 'string') {
+                $td.text(out);
+                if (out !== '') {
+                    $td.attr('title', out);
+                }
+
+                return out;
+            }
+            $td.append(out);
+
+            return col.copyValue ? String(col.copyValue(row) ?? '') : '';
+        }
+
+        if (col.type === 'boolean') {
+            $td.append($('<span/>', {
+                'class': 'aaxis-grid__badge ' + (row[col.key]
+                    ? 'aaxis-grid__badge--on'
+                    : 'aaxis-grid__badge--off'),
+                text: row[col.key] ? __('aaxis.common.grid.yes') : __('aaxis.common.grid.no')
+            }));
+
+            return '';
+        }
+
+        const text = String(row[col.key] ?? '');
+        $td.text(text);
+        if (text !== '') {
+            // Full value on hover.
+            $td.attr('title', text);
+        }
+
+        return text;
+    }
+
+    private renderActionsCell(row: any): any {
+        const $actions = $('<td/>', {'class': 'aaxis-grid__col-actions'});
+        this.actions.forEach(action => $actions.append(this.renderActionButton(action, row)));
+
+        return $actions;
+    }
+
+    private renderActionButton(action: GridAction, row: any): any {
+        const isDisabled = !!action.disabled?.(row);
+        const $btn = $('<button/>', {
+            type: 'button',
+            'class': 'aaxis-grid__action'
+                + (action.badge ? ' aaxis-grid__action--badge' : '')
+                + (action.variant === 'danger' ? ' aaxis-grid__action--danger' : '')
+                + (isDisabled ? ' aaxis-grid__action--disabled' : ''),
+            'data-action': action.key,
+            'data-id': row[this.idKey],
+            title: isDisabled ? (action.disabledTitle || action.label) : action.label,
+            'aria-label': action.label
+        }).append(action.badge
+            ? $('<span/>', {'class': 'aaxis-grid__action-badge', text: action.badge})
+            : $('<span/>', {'class': 'fa ' + (action.icon || ''), 'aria-hidden': 'true'}));
+        if (isDisabled) {
+            $btn.prop('disabled', true).attr('aria-disabled', 'true');
+        }
+
+        return $btn;
     }
 
     private onActionClick(event: any): void {
@@ -996,7 +1119,10 @@ export default class DataGrid {
         const id = $btn.attr('data-id');
         const row = this.rows.find(r => String(r[this.idKey]) === String(id));
         if (row && this.onAction) {
-            this.onAction(actionKey, row);
+            // The raw event rides along so NAVIGATING actions can honor cmd/ctrl+click
+            // (open in a new tab via navigateTo) — actions are buttons, so the browser
+            // cannot do it natively.
+            this.onAction(actionKey, row, (event.originalEvent || event) as MouseEvent);
         }
     }
 
@@ -1011,22 +1137,32 @@ export default class DataGrid {
 
     private copyText(text: string): void {
         const done = () => this.showToast(__('aaxis.common.grid.copied'));
-        if (navigator.clipboard && navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(text).then(done).catch(() => { /* ignore */ });
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).then(done).catch(() => { /* best effort */ });
             return;
         }
+        this.copyTextFallback(text, done);
+    }
+
+    /**
+     * Pre-Clipboard-API copy path. Still load-bearing: navigator.clipboard only exists in secure
+     * contexts, and the admin is reachable over plain http in some installs (see {@see csrf}), so
+     * execCommand remains the only way to copy there despite being deprecated.
+     */
+    private copyTextFallback(text: string, done: () => void): void {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
         try {
-            const ta = document.createElement('textarea');
-            ta.value = text;
-            ta.style.position = 'fixed';
-            ta.style.opacity = '0';
-            document.body.appendChild(ta);
             ta.select();
-            document.execCommand('copy');
-            document.body.removeChild(ta);
-            done();
-        } catch (e) {
-            // ignore
+            if (document.execCommand('copy')) {
+                done();
+            }
+        } finally {
+            // Never leave the scratch textarea behind, even if execCommand throws.
+            ta.remove();
         }
     }
 
@@ -1042,6 +1178,7 @@ export default class DataGrid {
 
     dispose(): void {
         $(document).off('click.aaxisGrid', this.onDocClick);
+        $(document).off('keydown.aaxisGrid', this.onDocKeydown);
         if (this.$root) {
             this.$root.off();
             this.$root.remove();

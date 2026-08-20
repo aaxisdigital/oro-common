@@ -42,9 +42,69 @@ independent of each other. **When something is needed by two or more Aaxis bundl
   per-user layout store: `Entity/GridPreference`, `Manager/GridPreferenceManager`,
   `Controller/GridPreferenceController` (`aaxis_common_grid_preference_*`), table
   `aaxis_grid_preference`. Imported by consumers as `aaxiscommon/js/app/widgets/*`.
+  - `onAction(actionKey, row, event?)` — the grid forwards the raw MouseEvent so NAVIGATING
+    actions can honor **cmd/ctrl+click = open in a new tab** via the named export
+    `navigateTo(url, event?)` (row actions are `<button>`s, so the browser can't offer its native
+    gesture). Any handler that ends in `window.location.assign/href` should call `navigateTo`
+    with the forwarded event instead.
+  - `RecordFormModal` shows a **busy spinner inside the submit button** while `onSubmit` is in
+    flight (`.aaxis-rfm__submit-spinner`, same treatment as the flow editor's save/debug buttons),
+    so every consumer — Systems, Entities, … — gets the feedback without opting in.
   - `RecordFormModal` top-level fields stack one-per-line by default. To put several on one line,
     give them the same `row: '<id>'` and a `width: '<n>%'` (the number is the flex ratio, e.g.
     45/45/10). `collection` fields can't share a row. CSS: `.aaxis-rfm__row` in `grid.scss`.
+  - `RecordFormModal` field types: text / `password` (show-hide eye toggle; value is NOT trimmed —
+    the input carries `data-type="password"` so reads survive the toggle flipping its `type`; the
+    toggle needs its `z-index: 2` — Oro's global `input:focus` rule sets `z-index: 1`, which DOES
+    apply because the input is a flex item of `.aaxis-rfm__password`, and without the override the
+    focused input paints over the icon exactly while the value is being edited) /
+    textarea / number (`min`/`max` validated on submit + set as input attrs) / boolean / select /
+    collection. Any non-collection field takes an optional `hint` (muted helper line under the
+    control, `.aaxis-rfm__hint`) and `disabled: true` (grayed control — still collected on submit
+    but skips required/min-max validation; prefer disabling over hiding conditional fields).
+    Modal option `resizable: false` removes the dialog's resize handle. The show/hide labels are
+    `aaxis.common.grid.show_value` / `hide_value` (jsmessages).
+  - `GridAction` renders either an `icon` (Font-Awesome class) **or** a `badge` — a short text pill
+    (`.aaxis-grid__action-badge`) for actions that read better as a word than a glyph, e.g. Ontology's
+    `dwl`. Both fields are optional; set exactly one. ⚠️ `.aaxis-grid__badge` is a DIFFERENT, older
+    class (the boolean column's on/off pill) — don't conflate them.
+  - The filter popover and the column menu close on **Escape** as well as on an outside click
+    (`onDocKeydown` → `onEscape`, torn down in `dispose()` alongside the click handler); Escape on
+    the filter returns focus to its funnel button.
+  - `DataGrid.setFilter(key, {operator, value} | null)` applies/clears a column filter
+    programmatically — for deep links that arrive pre-filtered (Ontology's Entities → Data View
+    action). It resets to page 1 and re-renders, exactly like the filter popover's Apply, and the
+    filter stays visible and clearable in the UI.
+  - ⚠️ **The actions column width is computed, not fixed.** The table is `table-layout: fixed` and
+    every `td` ellipsizes, so a too-narrow actions cell doesn't wrap — it silently *hides* buttons
+    (the symptom is a lone "DWL …" where three actions should be). `actionsColumnWidth()` sizes the
+    header cell inline from the action set (~28px per icon, badge length + padding, floored at the
+    historical 110px so icon-only grids are unchanged), and `td.aaxis-grid__col-actions` overrides
+    the ellipsis with `overflow: visible` so any future underestimate spills visibly instead of
+    disappearing. Adding an action with wide content? Check the estimate there.
+  - `Dialog` options: `width`, `height`, `movable` (adds a drag handle on the header — the dialog is
+    flex-centred until the first drag, then pinned to `position: fixed` left/top so pointer moves can
+    place it directly; drags starting on ✕ are ignored), `bodyClass` (styling hook on the body, e.g.
+    Ontology's `.aaxis-dwl` turns it into a flex column so the CSS resize handle grows the content
+    instead of scrolling it), and `onClose`. ✕ / Escape / backdrop all close and clean up.
+  - `RecordFormModal` extras: consecutive fields sharing a `tabGroup` render as a tab strip (one
+    tab per field, labelled by `tabLabel`; inactive panels stay in the DOM so values still
+    collect; a collection in a tab drops its own title). Modal option `testAction: {label, onTest}`
+    adds a button on the LEFT of Cancel/Submit — `onTest(values)` gets the current values
+    (unvalidated) and resolves a `TestOutcome` `{success, message?, steps?}` rendered as a
+    checklist above the actions row (strings: `aaxis.common.grid.testing/test_success/test_error`).
+  - Oro's admin theme gives inputs/selects/textareas a **fixed width**, so `grid.scss` re-asserts
+    `width: 100%` with element-qualified selectors (`input.aaxis-rfm__control`, …). Any new control
+    markup must keep the `aaxis-rfm__control` class or it will render ~230px wide and break
+    multi-field rows. The theme also adds `margin-bottom: 8px` to every control; `grid.scss` zeroes
+    it (fields own their spacing, and the stray margin made the password wrapper 8px taller than
+    its input, which pushed the absolutely-centered show/hide toggle off-centre).
+  - Selects are upgraded to **Select2**, which copies the original `<select>`'s classes onto the
+    generated `.select2-container` — so `.form-control`'s padding/height land on the container, and
+    Oro pins `.select2-container` at `height: 32px`. The combo's height therefore belongs on the
+    CONTAINER (a taller `.select2-choice` just overflows the visible border), and `.select2-chosen`
+    needs `height: auto` or its fixed 30px pins the label to the top of the combo. `grid.scss` does
+    this for both `.aaxis-rfm` and `.aaxis-dialog`; keep the two blocks in step.
 - **Connection-test registry** — `Connection/ConnectionTesterInterface`,
   `Connection/ConnectionTestRegistry` (tagged-locator, `index_by: tool`),
   `Controller/ConnectionTestController` (`aaxis_common_connection_test`), and
@@ -66,6 +126,10 @@ independent of each other. **When something is needed by two or more Aaxis bundl
   to the admin role by `Migrations/Data/ORM/LoadAaxisCommonAdminPermissions`.
 - Schema is a single consolidated installer (`Migrations/Schema/AaxisCommonBundleInstaller`) — this is
   pre-production, so edit the install rather than adding upgrade migrations.
+- In TS classes extending Oro's `BaseComponent` (any bundle), never use class-field initializers:
+  the base constructor calls `initialize()` before they run, and they then overwrite whatever
+  `initialize()` assigned. Declare fields with `!:` and assign them in `initialize()`. Plain
+  classes (the DataGrid/Dialog widgets here) are unaffected.
 - Only the `.ts` sources in `Resources/js-src` are committed. The emitted `.js`/`.d.ts` under
   `Resources/public/js` are **generated** at asset-build time and **git-ignored** — never commit or
   hand-edit them. `TypeScriptCompiler` now also rebuilds when this bundle is installed under

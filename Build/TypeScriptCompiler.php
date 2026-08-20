@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Aaxis\Bundle\CommonBundle\Build;
 
+use Aaxis\Bundle\CommonBundle\Exception\TypeScriptCompilationException;
 use Psr\Log\LoggerInterface;
 use Symfony\Component\Process\Process;
 
@@ -76,18 +77,20 @@ class TypeScriptCompiler
     /**
      * Runs the TypeScript compiler.
      *
-     * @throws \RuntimeException when TypeScript is not installed or the tsconfig is missing
+     * @throws TypeScriptCompilationException when TypeScript is not installed or the tsconfig is missing
      */
     public function compile(): Process
     {
         if (!is_file($this->getTscBinary())) {
-            throw new \RuntimeException(sprintf(
+            throw new TypeScriptCompilationException(sprintf(
                 'TypeScript compiler not found at "%s". Install it with "pnpm add -D typescript".',
                 $this->getTscBinary()
             ));
         }
         if (!is_file($this->tsConfigPath)) {
-            throw new \RuntimeException(sprintf('tsconfig not found at "%s".', $this->tsConfigPath));
+            throw new TypeScriptCompilationException(
+                sprintf('tsconfig not found at "%s".', $this->tsConfigPath)
+            );
         }
 
         $process = new Process(

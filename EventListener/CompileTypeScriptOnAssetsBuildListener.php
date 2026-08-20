@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Aaxis\Bundle\CommonBundle\EventListener;
 
 use Aaxis\Bundle\CommonBundle\Build\TypeScriptCompiler;
+use Aaxis\Bundle\CommonBundle\Exception\TypeScriptCompilationException;
 use Symfony\Component\Console\ConsoleEvents;
 use Symfony\Component\Console\Event\ConsoleCommandEvent;
 use Symfony\Component\EventDispatcher\EventSubscriberInterface;
@@ -55,7 +56,7 @@ class CompileTypeScriptOnAssetsBuildListener implements EventSubscriberInterface
         try {
             $process = $this->compiler->compile();
         } catch (\RuntimeException $e) {
-            throw new \RuntimeException(sprintf(
+            throw new TypeScriptCompilationException(sprintf(
                 '[%s] Cannot compile TypeScript and there is no committed JS to fall back on: %s',
                 $label,
                 $e->getMessage()
@@ -66,7 +67,7 @@ class CompileTypeScriptOnAssetsBuildListener implements EventSubscriberInterface
             $output->writeln(sprintf('<error>[%s] TypeScript compilation failed:</error>', $label));
             $output->writeln($process->getOutput() . $process->getErrorOutput());
 
-            throw new \RuntimeException(sprintf(
+            throw new TypeScriptCompilationException(sprintf(
                 '[%s] TypeScript compilation failed; aborting asset build.',
                 $label
             ));
