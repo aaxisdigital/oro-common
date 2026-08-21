@@ -83,6 +83,13 @@ independent of each other. **When something is needed by two or more Aaxis bundl
     programmatically — for deep links that arrive pre-filtered (Ontology's Entities → Data View
     action). It resets to page 1 and re-renders, exactly like the filter popover's Apply, and the
     filter stays visible and clearable in the UI.
+  - **Long grids scroll internally, never the page**: the table lives in `.aaxis-grid__scroll`
+    (`fitScrollHeight()` caps it with a max-height measured top-edge → viewport bottom, refit on
+    window resize and from `updatePager()` since the pager sits ABOVE the table and shifts it when
+    appearing; max-height, not height, so short grids stay compact) with STICKY `thead th` (solid
+    `#f1f4f8` copy of the header tint + a box-shadow hairline — without them scrolled rows show
+    through and the bordered-table line scrolls away). The filter popover / column menu stay
+    OUTSIDE the wrapper (it would clip them); their rect-based positioning is wrapper-insensitive.
   - ⚠️ **The actions column width is computed, not fixed.** The table is `table-layout: fixed` and
     every `td` ellipsizes, so a too-narrow actions cell doesn't wrap — it silently *hides* buttons
     (the symptom is a lone "DWL …" where three actions should be). `actionsColumnWidth()` sizes the

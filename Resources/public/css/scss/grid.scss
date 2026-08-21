@@ -6,6 +6,24 @@
     position: relative;
     padding-bottom: 64px;
 
+    // The table's own scroll container (viewport-fitted by fitScrollHeight): long grids scroll
+    // HERE, never the page. The header row stays visible via sticky th below.
+    &__scroll {
+        overflow-y: auto;
+        overscroll-behavior: contain;
+    }
+
+    &__table thead th {
+        position: sticky;
+        top: 0;
+        z-index: 5;
+        // Solid copy of the header tint (Oro's $neutral-grey-2 via the `grid` class): a sticky
+        // th without its own background lets scrolled rows show through it.
+        background: #f1f4f8;
+        // The bordered-table hairline scrolls away under a sticky header — repaint it.
+        box-shadow: 0 1px 0 #dfe5eb;
+    }
+
     &__table {
         width: 100%;
         margin: 0;

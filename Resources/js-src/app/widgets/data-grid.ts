@@ -122,6 +122,7 @@ export default class DataGrid {
     private currentPage = 1;
 
     private $root: any = null;
+    private $scroll: any = null;
     private $thead: any = null;
     private $tbody: any = null;
     private $popover: any = null;
@@ -131,6 +132,7 @@ export default class DataGrid {
     private popoverCol: GridColumn | null = null;
     private readonly onDocClick: (e: any) => void;
     private readonly onDocKeydown: (e: any) => void;
+    private readonly onWinResize = () => this.fitScrollHeight();
 
     constructor(options: DataGridOptions) {
         this.columns = options.columns;
@@ -202,7 +204,11 @@ export default class DataGrid {
             $('<span/>', {'class': 'aaxis-grid__overlay-text', text: __('aaxis.common.grid.loading')})
         );
         this.$pager = this.buildPager();
-        this.$root.append(this.$pager, $table, this.$popover, this.$colMenu, this.$overlay);
+        // The table lives in its OWN scroll container (viewport-fitted by fitScrollHeight, header
+        // sticky) so a long grid scrolls internally instead of scrolling the whole page. The
+        // popover/colmenu stay OUTSIDE it — the wrapper would clip them.
+        this.$scroll = $('<div/>', {'class': 'aaxis-grid__scroll'}).append($table);
+        this.$root.append(this.$pager, this.$scroll, this.$popover, this.$colMenu, this.$overlay);
         $container.empty().append(this.$root);
 
         this.$root.on('click', 'th[data-sort-key]', (e: any) => this.onHeaderClick(e));
@@ -227,11 +233,27 @@ export default class DataGrid {
         this.$pager.on('focusout', '[data-role="page-number"]', (e: any) => this.goToPageInput($(e.currentTarget).text()));
         $(document).on('click.aaxisGrid', this.onDocClick);
         $(document).on('keydown.aaxisGrid', this.onDocKeydown);
+        $(window).on('resize.aaxisGrid', this.onWinResize);
 
         this.renderBody();
         this.updateOverlay();
         this.loadPreferences();
         return this;
+    }
+
+    /**
+     * Caps the table's scroll container to the room between its top edge and the viewport bottom,
+     * so the grid scrolls internally rather than growing the page. max-height (not height) keeps
+     * short grids content-sized. Re-run on window resize and after each body render (the pager
+     * appearing above shifts the container down).
+     */
+    private fitScrollHeight(): void {
+        const el = this.$scroll?.get(0);
+        if (!el || !el.isConnected) {
+            return;
+        }
+        const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - 24);
+        this.$scroll.css('max-height', Math.max(220, available) + 'px');
     }
 
     /**
@@ -1013,6 +1035,9 @@ export default class DataGrid {
         if (!this.$pager) {
             return;
         }
+        // Every body render ends here, and the pager appearing/disappearing above the table
+        // shifts the scroll container — refit it either way.
+        this.fitScrollHeight();
         if (total === 0) {
             this.$pager.attr('hidden', 'hidden');
             return;
@@ -1199,6 +1224,7 @@ export default class DataGrid {
     dispose(): void {
         $(document).off('click.aaxisGrid', this.onDocClick);
         $(document).off('keydown.aaxisGrid', this.onDocKeydown);
+        $(window).off('resize.aaxisGrid', this.onWinResize);
         if (this.$root) {
             this.$root.off();
             this.$root.remove();
