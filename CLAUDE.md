@@ -39,6 +39,10 @@ independent of each other. **When something is needed by two or more Aaxis bundl
 - **`tsconfig.base.json`** — the template each bundle's `tsconfig.json` extends (bundles ship their
   own copy, since each is a standalone Composer package with no fixed relative path to this one).
 - **Grid widgets** (`Resources/js-src/app/widgets/{data-grid,dialog,record-form-modal}.ts`) + their
+  `DataGrid` option `onRowClick(row, event)`: makes whole rows clickable (pointer cursor + hover,
+  `aaxis-grid__row--clickable`; clicks on buttons/links/inputs/the actions cell keep their own
+  behavior) — NOTE it DISABLES the cells' click-to-copy, the two gestures share one click. Used by
+  the ontology Flows page to open the editor (no separate edit action there anymore).
   per-user layout store: `Entity/GridPreference`, `Manager/GridPreferenceManager`,
   `Controller/GridPreferenceController` (`aaxis_common_grid_preference_*`), table
   `aaxis_grid_preference`. Imported by consumers as `aaxiscommon/js/app/widgets/*`.

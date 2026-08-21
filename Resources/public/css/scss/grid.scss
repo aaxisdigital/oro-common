@@ -66,6 +66,15 @@
     }
 
     // Cells whose value can be copied on click.
+    // Row-clickable grids (DataGridOptions.onRowClick): the whole row is the click target.
+    &__row--clickable {
+        cursor: pointer;
+
+        &:hover td {
+            background: #f0f6ff;
+        }
+    }
+
     &__cell--copyable {
         cursor: pointer;
     }

@@ -76,6 +76,12 @@ export interface DataGridOptions {
     /** URL for GET/PUT of the per-user preferences (already includes the grid key). */
     preferencesUrl?: string;
     onAction?: (actionKey: string, row: any, event?: MouseEvent) => void;
+    /**
+     * Makes every row clickable (pointer cursor): clicks anywhere outside interactive elements
+     * fire this instead. NOTE: enabling it DISABLES the cells' click-to-copy behavior — the two
+     * gestures cannot coexist on the same click.
+     */
+    onRowClick?: (row: any, event: MouseEvent) => void;
 }
 
 interface ColumnFilter {
@@ -98,6 +104,7 @@ export default class DataGrid {
     private readonly idKey: string;
     private readonly emptyText: string;
     private readonly onAction?: (actionKey: string, row: any, event?: MouseEvent) => void;
+    private readonly onRowClick?: (row: any, event: MouseEvent) => void;
 
     private rows: any[] = [];
     private loaded = false;
@@ -131,6 +138,7 @@ export default class DataGrid {
         this.idKey = options.idKey || 'id';
         this.emptyText = options.emptyText || __('aaxis.common.grid.empty');
         this.onAction = options.onAction;
+        this.onRowClick = options.onRowClick;
         this.rows = options.rows || [];
         this.pageSizeOptions = options.pageSizeOptions || [10, 25, 50, 100];
         this.pageSize = options.pageSize || 25;
@@ -1028,6 +1036,17 @@ export default class DataGrid {
             $tr.append(this.renderActionsCell(row));
         }
 
+        if (this.onRowClick) {
+            $tr.addClass('aaxis-grid__row--clickable');
+            $tr.on('click', (e: any) => {
+                // Interactive elements keep their own behavior (action buttons, links, inputs).
+                if ($(e.target).closest('button, a, input, select, label, .aaxis-grid__col-actions').length) {
+                    return;
+                }
+                this.onRowClick!(row, (e.originalEvent || e) as MouseEvent);
+            });
+        }
+
         return $tr;
     }
 
@@ -1038,8 +1057,9 @@ export default class DataGrid {
         }
 
         const copyText = this.fillCell($td, col, row);
-        // Click anywhere on the cell copies its value (the preview button stops propagation).
-        if (copyText !== '') {
+        // Click anywhere on the cell copies its value (the preview button stops propagation) —
+        // unless the grid is row-clickable: navigation owns the click then.
+        if (copyText !== '' && !this.onRowClick) {
             $td.addClass('aaxis-grid__cell--copyable').attr('data-copy', copyText);
         }
 
