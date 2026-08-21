@@ -27,12 +27,16 @@ independent of each other. **When something is needed by two or more Aaxis bundl
 - **`aaxis_tab` menu group** (`navigation.yml`) + its `aaxis-menu-icon` glyph
   (`Resources/public/css/scss/menu-icon.scss`). Each feature bundle attaches its own sub-group under
   `aaxis_tab` (e.g. `aaxis_tools_group`, `aaxis_devtools_group`).
-- **"Aaxis" System Configuration tab** (`Resources/config/oro/system_configuration.yml`): groups
-  `aaxis` (top-level tab, priority 99 — below Oro's "System Configuration" tab at 255, above
-  Commerce/CRM/Marketing at 0) + `aaxis_general` ("General" section). Feature bundles hang their config pages under `aaxis > aaxis_general` in
-  their own `system_configuration.yml` — Oro hard-requires fields at nesting level 5
-  (tab > section > page > fieldset > fields), so the section level is not optional. Config deep
-  links use `activeGroup: 'aaxis'`, `activeSubGroup: '<page group>'`.
+- **"Aaxis" System Configuration tab** (`Resources/config/oro/system_configuration.yml`): the
+  `aaxis` group only (top-level tab, priority 99 — below Oro's "System Configuration" tab at 255,
+  above Commerce/CRM/Marketing at 0). Feature bundles attach their OWN second-level menu group
+  directly under `aaxis` (`aaxis_tools` "Tools" 100, `aaxis_devtools` "DevTools" 95,
+  `aaxis_ontology` "Ontology" 90 — no "Aaxis" prefix in the titles, the tab already says it) with
+  their pages as third-level children; each page wraps its fields in a `<page>_section` fieldset
+  because Oro hard-requires fields at nesting level 5 (tab > menu group > page > fieldset >
+  fields). The old shared `aaxis_general` middle level is GONE. Config deep links use
+  `activeGroup: 'aaxis'`, `activeSubGroup: '<page group>'` (the level-3 page, e.g.
+  `aaxis_tools_queue_monitor`).
 - **TypeScript build pipeline** (`Build/TypeScriptCompiler`, `Command/CompileTypeScriptCommand`,
   `EventListener/CompileTypeScriptOnAssetsBuildListener`). NOT auto-wired here — each consuming bundle
   instantiates them in its own `services.yml`, pointing at its own `tsconfig.json` and command name.

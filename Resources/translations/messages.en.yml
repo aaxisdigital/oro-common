@@ -6,8 +6,6 @@ aaxis:
         config:
             aaxis:
                 title: 'Aaxis'
-            general:
-                title: 'General'
         grid:
             columns_title: 'Columns'
             refresh: 'Refresh'
