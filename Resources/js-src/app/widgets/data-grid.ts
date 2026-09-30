@@ -249,7 +249,7 @@ export default class DataGrid {
      */
     private fitScrollHeight(): void {
         const el = this.$scroll?.get(0);
-        if (!el || !el.isConnected) {
+        if (!el?.isConnected) {
             return;
         }
         const available = Math.floor(window.innerHeight - el.getBoundingClientRect().top - 24);
@@ -801,7 +801,11 @@ export default class DataGrid {
         if (value === null || value === undefined || value === '') {
             return null;
         }
-        const d = new Date(value);
+        // A bare 'YYYY-MM-DD' (what the date box yields) is a LOCAL calendar day; `new Date()` would
+        // read it as UTC midnight, i.e. the previous evening west of Greenwich.
+        const d = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value)
+            ? new Date(value + 'T00:00:00')
+            : new Date(value);
         if (Number.isNaN(d.getTime())) {
             return null;
         }

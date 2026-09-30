@@ -750,7 +750,9 @@ export default class RecordFormModal {
                 values[field.key] = this.collectCollection(field);
                 return;
             }
-            const $control = this.$modal.find('[data-field="' + field.key + '"]').first();
+            // Scoped to the field wrappers (like collectValues): a collection sub-field sharing this
+            // key would otherwise be read instead when the collection renders first.
+            const $control = this.$modal.find('.aaxis-rfm__field [data-field="' + field.key + '"]').first();
             const value = this.readControl(field, $control);
             const error = field.disabled ? '' : this.validateField(field, value);
             if (error !== '') {
