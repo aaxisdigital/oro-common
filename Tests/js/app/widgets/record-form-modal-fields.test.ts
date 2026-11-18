@@ -210,6 +210,17 @@ describe('RecordFormModal number fields', () => {
 });
 
 describe('RecordFormModal boolean fields', () => {
+    it('puts the switch on its own control-height line, its hint to the right of it', () => {
+        open([field('boolean', {key: 'on', hint: 'Keeps it local'}), field('boolean', {key: 'off'})]);
+
+        const $line = control('on').closest('.aaxis-rfm__switch-line');
+        expect($line).toHaveLength(1);
+        expect($line.children().map((_i: number, el: HTMLElement) => el.className).get())
+            .toEqual(['aaxis-rfm__switch', 'aaxis-rfm__hint']);
+        expect($line.find('.aaxis-rfm__hint').text()).toBe('Keeps it local');
+        expect(control('off').closest('.aaxis-rfm__switch-line').children()).toHaveLength(1);
+    });
+
     it('renders a switch reflecting the initial value', () => {
         open([field('boolean', {key: 'on'}), field('boolean', {key: 'off'})], {on: true, off: false});
 

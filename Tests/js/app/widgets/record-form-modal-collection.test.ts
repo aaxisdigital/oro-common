@@ -48,6 +48,42 @@ describe('RecordFormModal collections', () => {
         expect($headers.eq(4).hasClass('aaxis-rfm__collection-actions')).toBe(true);
     });
 
+    it('wraps the table in its scroll box, and fills the form only when asked', () => {
+        open([items()]);
+        expect($('[data-collection="items"] > [data-role="collection-scroll"] > .aaxis-rfm__collection-table')).toHaveLength(1);
+        expect($('.aaxis-rfm__collection--fill, .aaxis-rfm__body--fill')).toHaveLength(0);
+
+        $('.aaxis-rfm').remove();
+        open([{key: 'title', label: 'Title', type: 'text'}, items({fill: true})]);
+        expect($('[data-collection="items"]').hasClass('aaxis-rfm__collection--fill')).toBe(true);
+        expect($('.aaxis-rfm__body').hasClass('aaxis-rfm__body--fill')).toBe(true);
+    });
+
+    it('does not fill from inside a tab strip (the strip owns the layout)', () => {
+        open([items({fill: true, tabGroup: 't'}), {key: 'notes', label: 'Notes', type: 'textarea', tabGroup: 't'}]);
+
+        expect($('.aaxis-rfm__collection--fill, .aaxis-rfm__body--fill')).toHaveLength(0);
+    });
+
+    it('scrolls a new row into view', () => {
+        open([items({fill: true})], {items: [{name: 'a'}, {name: 'b'}]});
+        const scroller = $('[data-role="collection-scroll"]').get(0) as HTMLElement;
+        Object.defineProperty(scroller, 'scrollHeight', {configurable: true, value: 640});
+
+        $('[data-role="add-row"]').trigger('click');
+
+        expect(scroller.scrollTop).toBe(640);
+    });
+
+    it('renders the row delete as a bare glyph button, without the button box', () => {
+        open([items()], {items: [{name: 'a'}]});
+        const $remove = $('[data-role="remove-row"]');
+
+        expect($remove.hasClass('aaxis-rfm__row-remove')).toBe(true);
+        expect($remove.hasClass('btn')).toBe(false);
+        expect($remove.find('.fa-trash-o')).toHaveLength(1);
+    });
+
     it('starts without rows when the value is missing or not an array', () => {
         open([items()], {items: 'nope'});
 

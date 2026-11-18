@@ -16,7 +16,10 @@ export interface FormField {
     type: FieldType;
     required?: boolean;
     placeholder?: string;
-    /** Muted helper line rendered under the control (e.g. "a value is stored — leave empty to keep it"). */
+    /**
+     * Muted helper line rendered under the control (e.g. "a value is stored — leave empty to keep
+     * it"). A 'boolean' shows it to the RIGHT of its switch instead, on the switch's line.
+     */
     hint?: string;
     /**
      * Renders the control disabled (grayed, not editable). Disabled fields keep their value, are
@@ -48,6 +51,12 @@ export interface FormField {
     addLabel?: string;
     /** For 'collection': empty hint. */
     emptyText?: string;
+    /**
+     * For a top-level 'collection': the collection takes the form's remaining height and only its
+     * ROWS scroll (sticky header) — the fields above it, its title and its add-row button stay in
+     * view. Without it the whole form body scrolls.
+     */
+    fill?: boolean;
     /**
      * Consecutive top-level fields sharing the same non-empty `tabGroup` render as a tab strip —
      * one tab per field (labelled by {@see tabLabel}, falling back to `label`), only the active
@@ -302,6 +311,13 @@ export default class RecordFormModal {
         while (i < fields.length) {
             i = this.appendGroupAt(fields, i, values);
         }
+        // A filling collection turns the body into a column whose only scrolling part is that
+        // collection's rows (see FormField.fill).
+        this.$body.toggleClass('aaxis-rfm__body--fill', fields.some(f => RecordFormModal.fills(f)));
+    }
+
+    private static fills(field: FormField): boolean {
+        return field.type === 'collection' && field.fill === true && !field.tabGroup;
     }
 
     /**
@@ -500,9 +516,20 @@ export default class RecordFormModal {
             $label.append($('<span/>', {'class': 'aaxis-rfm__req', text: ' *', 'aria-hidden': 'true'}));
         }
         $group.append($label);
-        $group.append(this.buildControl(field, values[field.key]));
-        if (field.hint) {
-            $group.append($('<span/>', {'class': 'aaxis-rfm__hint', text: field.hint}));
+        const $control = this.buildControl(field, values[field.key]);
+        if (field.type === 'boolean') {
+            // The switch sits on a line as tall as the single-line controls, so in a shared row it
+            // centers on their line; its hint reads to the right of it.
+            const $line = $('<div/>', {'class': 'aaxis-rfm__switch-line'}).append($control);
+            if (field.hint) {
+                $line.append($('<span/>', {'class': 'aaxis-rfm__hint', text: field.hint}));
+            }
+            $group.append($line);
+        } else {
+            $group.append($control);
+            if (field.hint) {
+                $group.append($('<span/>', {'class': 'aaxis-rfm__hint', text: field.hint}));
+            }
         }
         $group.append($('<span/>', {'class': 'aaxis-rfm__field-error', 'data-role': 'error', 'aria-live': 'polite'}));
         return $group;
@@ -588,6 +615,7 @@ export default class RecordFormModal {
 
     private buildCollection(field: FormField, rows: any[]): any {
         const $section = $('<div/>', {'class': 'aaxis-rfm__collection', 'data-collection': field.key});
+        $section.toggleClass('aaxis-rfm__collection--fill', RecordFormModal.fills(field));
         // Inside a tab the tab button already names the collection — skip the duplicate title.
         if (!field.tabGroup) {
             $section.append($('<h3/>', {'class': 'aaxis-rfm__collection-title', text: field.label}));
@@ -614,7 +642,8 @@ export default class RecordFormModal {
         const $tbody = $('<tbody/>', {'data-role': 'collection-rows'});
         rows.forEach(row => $tbody.append(this.buildCollectionRow(field, row)));
         $table.append($tbody);
-        $section.append($table);
+        // The table's own box: the part that scrolls when the collection fills the form.
+        $section.append($('<div/>', {'class': 'aaxis-rfm__collection-scroll', 'data-role': 'collection-scroll'}).append($table));
 
         $section.append($('<button/>', {
             type: 'button', 'class': 'btn btn-sm aaxis-rfm__add-row', 'data-role': 'add-row',
@@ -640,8 +669,9 @@ export default class RecordFormModal {
             $tr.append($cell);
         });
         $tr.append($('<td/>', {'class': 'aaxis-rfm__collection-actions'}).append(
+            // A bare glyph button (no box): the row's delete icon.
             $('<button/>', {
-                type: 'button', 'class': 'btn btn-icon aaxis-rfm__action--danger', 'data-role': 'remove-row',
+                type: 'button', 'class': 'aaxis-rfm__row-remove aaxis-rfm__action--danger', 'data-role': 'remove-row',
                 title: __('Delete'), 'aria-label': __('Delete')
             }).append($('<span/>', {'class': 'fa fa-trash-o', 'aria-hidden': 'true'}))
         ));
@@ -657,6 +687,11 @@ export default class RecordFormModal {
         const $row = this.buildCollectionRow(field, {});
         $section.find('[data-role="collection-rows"]').append($row);
         this.enhanceSelects($row);
+        // Bring the new row into view (it lands at the bottom of a scrolling row list).
+        const scroller = $section.find('[data-role="collection-scroll"]').get(0) as HTMLElement | undefined;
+        if (scroller) {
+            scroller.scrollTop = scroller.scrollHeight;
+        }
     }
 
     private onRemoveRow(event: any): void {

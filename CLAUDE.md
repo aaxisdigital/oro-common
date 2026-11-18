@@ -72,6 +72,18 @@ independent of each other. **When something is needed by two or more Aaxis bundl
     but skips required/min-max validation; prefer disabling over hiding conditional fields).
     Modal option `resizable: false` removes the dialog's resize handle. The show/hide labels are
     `aaxis.common.grid.show_value` / `hide_value` (jsmessages).
+  - A `boolean` renders on a `.aaxis-rfm__switch-line` as tall as the single-line controls
+    (36px), so in a shared `row` the switch centres on the inputs' line; its `hint` reads to the
+    RIGHT of the switch instead of under it. Switches inside collection cells are centred blocks
+    (inline they rode the text baseline, ~3px above the row's centre).
+  - A top-level `collection` with `fill: true` takes the form's remaining height and only its ROWS
+    scroll (`.aaxis-rfm__body--fill` + `.aaxis-rfm__collection--fill`; the table sits in
+    `[data-role="collection-scroll"]` — always, filling or not — with a sticky header). The fields
+    above, the collection title and its add-row button stay in view; on a window too short even
+    for that, the collection keeps 180px and the body scrolls as before. Ignored inside a
+    `tabGroup`. Adding a row scrolls it into view.
+  - The collection row's delete is a bare glyph (`.aaxis-rfm__row-remove`, no `btn` box), and like
+    every icon button it drops Oro's mouse-click focus ring (`:focus:not(:focus-visible)`).
   - `GridAction` renders either an `icon` (Font-Awesome class) **or** a `badge` — a short text pill
     (`.aaxis-grid__action-badge`) for actions that read better as a word than a glyph, e.g. Ontology's
     `dwl`. Both fields are optional; set exactly one. ⚠️ `.aaxis-grid__badge` is a DIFFERENT, older

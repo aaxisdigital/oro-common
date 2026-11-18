@@ -727,6 +727,20 @@
         }
     }
 
+    // A boolean field's line: the switch (+ its hint to the right), as tall as the single-line
+    // controls so a switch sharing a row with inputs/combos centers on their line.
+    &__switch-line {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        min-height: 36px;
+
+        .aaxis-rfm__hint {
+            min-width: 0;
+            line-height: 1.35;
+        }
+    }
+
     // Toggle switch
     &__switch {
         display: inline-flex;
@@ -806,6 +820,14 @@
             vertical-align: middle;
         }
 
+        // A switch in a cell is a BLOCK, centered: inline it rides the text baseline and sits ~3px
+        // above the row's centre line (where inputs, combos and the delete glyph are).
+        td > .aaxis-rfm__switch {
+            display: flex;
+            width: max-content;
+            margin: 0 auto;
+        }
+
         // Controls fill the full width of their cell.
         td .form-control,
         td input,
@@ -829,6 +851,63 @@
 
         &:hover {
             color: #c0392b;
+        }
+    }
+
+    // A collection row's delete glyph: no button box, just the icon.
+    &__row-remove {
+        padding: 4px 6px;
+        border: 0;
+        background: transparent;
+        line-height: 1;
+        cursor: pointer;
+
+        // Oro's reboot rings every focused button, mouse clicks included — keyboard focus only.
+        &:focus:not(:focus-visible) {
+            outline: none;
+        }
+    }
+
+    // FormField.fill: the body becomes a column whose only scrolling part is the filling
+    // collection's rows; the fields above, the collection title and its add button stay put. If
+    // the window is too short even for that, the collection keeps a minimum height and the body
+    // scrolls as before.
+    &__body--fill {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+
+        > * {
+            flex: 0 0 auto;
+        }
+
+        > .aaxis-rfm__collection--fill {
+            display: flex;
+            flex-direction: column;
+            flex: 1 1 auto;
+            min-height: 180px;
+            margin-bottom: 0;
+        }
+    }
+
+    &__collection--fill &__collection-scroll {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        margin-bottom: 10px;
+
+        .aaxis-rfm__collection-table {
+            margin-bottom: 0;
+        }
+
+        // The column titles stay visible over the scrolling rows (collapsed borders do not stick,
+        // hence the hairline).
+        thead th {
+            position: sticky;
+            top: 0;
+            z-index: 1;
+            box-shadow: inset 0 -1px 0 #e4e9ee;
         }
     }
 
