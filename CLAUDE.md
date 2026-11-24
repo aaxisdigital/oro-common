@@ -108,6 +108,16 @@ independent of each other. **When something is needed by two or more Aaxis bundl
     programmatically — for deep links that arrive pre-filtered (Ontology's Entities → Data View
     action). It resets to page 1 and re-renders, exactly like the filter popover's Apply, and the
     filter stays visible and clearable in the UI.
+  - `DataGridOptions.urlState: true` (opt-in, 2026-11-24 — every Ontology list page sets it) MIRRORS
+    the sort and the filters into the page URL so a refresh, a bookmark or a shared link shows the
+    same view: `sort=<key>` / `sort=-<key>` and `f.<key>=<operator>:<value>` (+ `f.<key>.mode=date`,
+    `f.<key>.path=<json path>`), written with `history.replaceState` (no history entry; every other
+    parameter and the hash are kept) on header sort, filter Apply/Clear and `setFilter()`, and read
+    back in the CONSTRUCTOR so the first render is already sorted/filtered. Restore ignores unknown
+    columns, non-sortable/filterable ones and operators the column type does not offer.
+    `renderHead()` now repaints the sort caret and the active funnels itself (they were only set on
+    clicks, so a restored state — or a head re-render — showed none); both indicator updates look
+    in `$thead`, which exists before the table is attached.
   - **Long grids scroll internally, never the page**: the table lives in `.aaxis-grid__scroll`
     (`fitScrollHeight()` caps it with a max-height measured top-edge → viewport bottom, refit on
     window resize and from `updatePager()` since the pager sits ABOVE the table and shifts it when

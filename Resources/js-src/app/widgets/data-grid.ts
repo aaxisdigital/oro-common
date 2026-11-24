@@ -82,7 +82,21 @@ export interface DataGridOptions {
      * gestures cannot coexist on the same click.
      */
     onRowClick?: (row: any, event: MouseEvent) => void;
+    /**
+     * Mirrors the sort and the column filters into the page URL (history.replaceState, other query
+     * parameters kept) and restores them from it on construction — so a refresh, a bookmark or a
+     * shared link shows the same view. Parameters: `sort=<key>` / `sort=-<key>` (descending) and
+     * `f.<key>=<operator>:<value>`, plus `f.<key>.mode=date` (a date-only datetime filter) and
+     * `f.<key>.path=<json path>`. Unknown columns, non-sortable/filterable ones and operators the
+     * column type does not offer are ignored.
+     */
+    urlState?: boolean;
 }
+
+/** URL parameter of the sort ({@see DataGridOptions.urlState}). */
+const URL_SORT = 'sort';
+/** URL parameter prefix of a column filter ({@see DataGridOptions.urlState}). */
+const URL_FILTER = 'f.';
 
 interface ColumnFilter {
     operator: string;
@@ -116,6 +130,7 @@ export default class DataGrid {
     private dragKey: string | null = null;
     private readonly gridKey?: string;
     private readonly preferencesUrl?: string;
+    private readonly urlState: boolean;
 
     private readonly pageSizeOptions: number[];
     private pageSize: number;
@@ -146,6 +161,7 @@ export default class DataGrid {
         this.pageSize = options.pageSize || 25;
         this.gridKey = options.gridKey;
         this.preferencesUrl = options.preferencesUrl;
+        this.urlState = options.urlState === true;
         this.columnOrder = this.columns.map(col => col.key);
         this.columns.forEach(col => {
             if (col.hidden) {
@@ -154,6 +170,70 @@ export default class DataGrid {
         });
         this.onDocClick = (e: any) => this.maybeCloseFilter(e);
         this.onDocKeydown = (e: any) => this.onEscape(e);
+        if (this.urlState) {
+            this.restoreUrlState();
+        }
+    }
+
+    /** Reads the sort and the filters the URL carries ({@see DataGridOptions.urlState}). */
+    private restoreUrlState(): void {
+        const params = new URLSearchParams(window.location.search);
+        const sort = params.get(URL_SORT) || '';
+        const desc = sort.startsWith('-');
+        const sortKey = desc ? sort.slice(1) : sort;
+        if (this.columns.some(col => col.key === sortKey && col.sortable !== false)) {
+            this.sortKey = sortKey;
+            this.sortDir = desc ? 'desc' : 'asc';
+        }
+        this.columns.filter(col => col.filterable !== false).forEach(col => {
+            const raw = params.get(URL_FILTER + col.key);
+            if (raw === null) {
+                return;
+            }
+            // The operator never holds a ':', the value may.
+            const at = raw.indexOf(':');
+            const operator = at < 0 ? raw : raw.slice(0, at);
+            if (!this.operatorsFor(col.type).includes(operator)) {
+                return;
+            }
+            const path = params.get(`${URL_FILTER}${col.key}.path`);
+            this.filters[col.key] = {
+                operator,
+                value: at < 0 ? '' : raw.slice(at + 1),
+                dateMode: params.get(`${URL_FILTER}${col.key}.mode`) === 'date' ? 'date' : undefined,
+                jsonPath: col.type === 'json' && path ? path : undefined
+            };
+        });
+    }
+
+    /**
+     * Writes the current sort and filters into the URL (replacing whatever the grid wrote before,
+     * keeping every other parameter) — without a navigation or a history entry.
+     */
+    private syncUrlState(): void {
+        if (!this.urlState) {
+            return;
+        }
+        const url = new URL(window.location.href);
+        const params = url.searchParams;
+        Array.from(params.keys())
+            .filter(key => key === URL_SORT || key.startsWith(URL_FILTER))
+            .forEach(key => params.delete(key));
+        if (this.sortKey !== null) {
+            params.set(URL_SORT, (this.sortDir === 'desc' ? '-' : '') + this.sortKey);
+        }
+        Object.keys(this.filters).forEach(key => {
+            const filter = this.filters[key];
+            params.set(URL_FILTER + key, `${filter.operator}:${filter.value ?? ''}`);
+            if (filter.dateMode === 'date') {
+                params.set(`${URL_FILTER}${key}.mode`, 'date');
+            }
+            if (filter.jsonPath) {
+                params.set(`${URL_FILTER}${key}.path`, filter.jsonPath);
+            }
+        });
+        const query = params.toString();
+        window.history.replaceState(window.history.state, '', url.pathname + (query ? '?' + query : '') + url.hash);
     }
 
     /** Columns in the user-defined display order. */
@@ -274,6 +354,9 @@ export default class DataGrid {
 
     private renderHead(): void {
         this.$thead.empty().append(this.buildHeadRow());
+        // A re-rendered head (column toggles/reorder) — and a restored URL state — keep their marks.
+        this.updateSortIndicators();
+        this.updateFilterIndicators();
     }
 
     private buildPager(): any {
@@ -421,10 +504,11 @@ export default class DataGrid {
         this.updateSortIndicators();
         this.currentPage = 1;
         this.renderBody();
+        this.syncUrlState();
     }
 
     private updateSortIndicators(): void {
-        this.$root.find('th[data-sort-key]').each((_i: number, el: any) => {
+        this.$thead.find('th[data-sort-key]').each((_i: number, el: any) => {
             const $th = $(el);
             const isActive = $th.attr('data-sort-key') === this.sortKey;
             $th.toggleClass('aaxis-grid__th--active', isActive);
@@ -437,7 +521,7 @@ export default class DataGrid {
     }
 
     private updateFilterIndicators(): void {
-        this.$root.find('[data-role="filter-btn"]').each((_i: number, el: any) => {
+        this.$thead.find('[data-role="filter-btn"]').each((_i: number, el: any) => {
             const $btn = $(el);
             const key = String($btn.attr('data-col'));
             $btn.toggleClass('aaxis-grid__filter-btn--active', !!this.filters[key]);
@@ -657,6 +741,7 @@ export default class DataGrid {
         this.closeFilter();
         this.currentPage = 1;
         this.renderBody();
+        this.syncUrlState();
     }
 
     /**
@@ -683,6 +768,7 @@ export default class DataGrid {
         this.updateFilterIndicators();
         this.currentPage = 1;
         this.renderBody();
+        this.syncUrlState();
     }
 
     private clearFilter(col: GridColumn): void {
@@ -691,6 +777,7 @@ export default class DataGrid {
         this.closeFilter();
         this.currentPage = 1;
         this.renderBody();
+        this.syncUrlState();
     }
 
     // --- Filtering / sorting -------------------------------------------------
