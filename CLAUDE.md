@@ -72,6 +72,19 @@ independent of each other. **When something is needed by two or more Aaxis bundl
     but skips required/min-max validation; prefer disabling over hiding conditional fields).
     Modal option `resizable: false` removes the dialog's resize handle. The show/hide labels are
     `aaxis.common.grid.show_value` / `hide_value` (jsmessages).
+  - A `select` with `picker: {placeholder?, addNew?: {label, onAdd(api)}, refresh?: () => Promise<SelectOption[]>}`
+    renders a TYPE-TO-FILTER picker instead of Select2 (the ontology flow editor's connector
+    picker, made reusable — 2026-11-24): a filter box + dropdown list (`.aaxis-rfm__picker*`;
+    the text showing the current pick is no filter, Enter takes the first match, options pick on
+    POINTERDOWN because the box's blur would hide the list first) in front of a HIDDEN `<select
+    data-field data-picker>` that holds the value — so reading, `required` validation (the error
+    paints the filter box) and `onFieldChange` work exactly as for any select, and Select2 skips
+    it. `addNew` closes the list with an "Add new …" entry; `refresh` adds a refresh button (the
+    pick survives while it still exists, otherwise it clears WITH a change). `onAdd` gets a
+    `SelectPickerApi` {refresh, values, pick} that resolves the picker rendered NOW, so it stays
+    valid across `rebuildFields` (e.g. a new-tab round trip). Top-level fields only. Strings:
+    `aaxis.common.grid.picker_refresh` / `picker_no_match`. First consumer: Ontology's Entities
+    form (System).
   - A `boolean` renders on a `.aaxis-rfm__switch-line` as tall as the single-line controls
     (36px), so in a shared `row` the switch centres on the inputs' line; its `hint` reads to the
     RIGHT of the switch instead of under it. Switches inside collection cells are centred blocks

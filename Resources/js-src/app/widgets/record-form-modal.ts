@@ -10,6 +10,32 @@ export interface SelectOption {
     label: string;
 }
 
+/**
+ * A 'select' rendered as a TYPE-TO-FILTER picker instead of the Select2 combo: a text box that
+ * filters the option list (the text showing the current pick is no filter — focusing lists
+ * everything), Enter takes the first match, blur restores the picked label. The VALUE lives in a
+ * hidden <select> carrying `data-field`, so reading, validation and onFieldChange work exactly as
+ * for any select. Top-level fields only.
+ */
+export interface SelectPicker {
+    /** Placeholder of the filter box. */
+    placeholder?: string;
+    /** An "Add new …" entry closing the list; `onAdd` gets the live picker's API. */
+    addNew?: {label: string; onAdd: (api: SelectPickerApi) => void};
+    /** Reloads the options — a refresh button beside the box. The pick survives while it still exists. */
+    refresh?: () => Promise<SelectOption[]>;
+}
+
+/** The live picker of a field (resolved at call time, so it survives a form rebuild). */
+export interface SelectPickerApi {
+    /** Reloads the options through `refresh` (resolves once they are in; a failure keeps the old ones). */
+    refresh(): Promise<void>;
+    /** The option values offered right now. */
+    values(): string[];
+    /** Picks a value as a user would (the field's change fires). */
+    pick(value: string): void;
+}
+
 export interface FormField {
     key: string;
     label: string;
@@ -45,6 +71,8 @@ export interface FormField {
     row?: string | number;
     /** For 'select'. */
     options?: SelectOption[];
+    /** For 'select': a type-to-filter picker (+ optional "Add new …" and refresh) instead of Select2. */
+    picker?: SelectPicker;
     /** For 'collection' (1:N): the sub-fields rendered per row. */
     fields?: FormField[];
     /** For 'collection': label of the add-row button. */
@@ -151,6 +179,8 @@ export default class RecordFormModal {
     private selects: any[] = [];
     /** Set while the widget changes a control's value programmatically, to mute onFieldChange. */
     private suppressChange = false;
+    /** Picker lists moved to <body> while open (see renderPickerList) — removed with the form. */
+    private pickerLists: any[] = [];
 
     constructor(options: RecordFormOptions) {
         this.opts = options;
@@ -162,7 +192,8 @@ export default class RecordFormModal {
         this.enhanceSelects(this.$modal);
         window.requestAnimationFrame(() => {
             this.$modal.addClass('is-open');
-            this.$modal.find('[data-field]').first().trigger('focus');
+            // (a picker's value <select> is hidden — never the one to focus)
+            this.$modal.find('[data-field]').not('[data-picker]').first().trigger('focus');
         });
 
         this.$modal.on('click', '[data-role="cancel"]', () => this.close());
@@ -173,6 +204,7 @@ export default class RecordFormModal {
         this.$modal.on('click', '[data-role="test"]', (e: any) => this.onTest(e));
         this.$modal.find('[data-role="form"]').on('submit', (e: any) => this.onSubmit(e));
         this.$modal.find('[data-role="form"]').on('change', '[data-field]', (e: any) => this.handleFieldChange(e));
+        this.bindPickers();
         $(document).on('keydown.aaxisRecordForm', (e: any) => {
             if (e.key === 'Escape') {
                 this.close();
@@ -194,6 +226,7 @@ export default class RecordFormModal {
             }
         });
         this.selects = [];
+        this.removePickerLists();
         $(document).off('keydown.aaxisRecordForm');
         $m.removeClass('is-open');
         window.setTimeout(() => $m.remove(), 180);
@@ -204,7 +237,7 @@ export default class RecordFormModal {
      * supports free-text search). Safe to call repeatedly; only un-enhanced selects are processed.
      */
     private enhanceSelects($scope: any): void {
-        $scope.find('select[data-field]').each((_i: number, el: any) => {
+        $scope.find('select[data-field]').not('[data-picker]').each((_i: number, el: any) => {
             const $select = $(el);
             if ($select.data('aaxis-select2')) {
                 return;
@@ -460,6 +493,7 @@ export default class RecordFormModal {
 
     /** Replaces the field schema and re-renders the body, preserving the values entered so far. */
     private rebuildFields(fields: FormField[]): void {
+        this.removePickerLists(); // their pickers are about to be re-rendered
         this.opts.values = this.collectValues();
         this.opts.fields = fields;
         this.disposeSelects();
@@ -541,7 +575,7 @@ export default class RecordFormModal {
             // Disable the actual form controls (the wrapper may be a plain div/label).
             const $inner = $control.is('[data-field]') ? $control : $control.find('[data-field]');
             $inner.prop('disabled', true);
-            $control.find('[data-role="password-toggle"]').prop('disabled', true);
+            $control.find('[data-role="password-toggle"], [data-role="picker-filter"], [data-role="picker-refresh"]').prop('disabled', true);
         }
         return $control;
     }
@@ -583,6 +617,9 @@ export default class RecordFormModal {
             case 'boolean':
                 return this.buildSwitch(field, !!value);
             case 'select': {
+                if (field.picker) {
+                    return this.buildPicker(field, value);
+                }
                 const $select = $('<select/>', {'class': 'form-control aaxis-rfm__control', 'data-field': field.key});
                 (field.options || []).forEach(opt => {
                     $select.append($('<option/>', {value: opt.value, text: opt.label}));
@@ -597,6 +634,224 @@ export default class RecordFormModal {
                     placeholder: field.placeholder || '', autocomplete: 'off', spellcheck: false
                 }).val(value != null ? String(value) : '');
         }
+    }
+
+    // --- Type-to-filter picker ('select' + `picker`) ----------------------------
+
+    /** The filter box + list in front of the hidden value select, plus the refresh button. */
+    private buildPicker(field: FormField, value: any): any {
+        const picker = field.picker as SelectPicker;
+        const $select = $('<select/>', {
+            'class': 'form-control aaxis-rfm__control', 'data-field': field.key, 'data-picker': '1', hidden: true
+        });
+        RecordFormModal.fillSelect($select, field.options || [], value != null ? String(value) : '');
+        const $filter = $('<input/>', {
+            type: 'text', 'class': 'form-control aaxis-rfm__control aaxis-rfm__picker-filter', 'data-role': 'picker-filter',
+            autocomplete: 'off', spellcheck: false, placeholder: picker.placeholder || '', 'aria-label': field.label
+        }).val(RecordFormModal.pickedLabel($select));
+        const $list = $('<div/>', {'class': 'aaxis-rfm__picker-list', 'data-role': 'picker-list', hidden: true});
+        const $wrap = $('<div/>', {'class': 'aaxis-rfm__picker', 'data-picker-for': field.key}).append(
+            $('<div/>', {'class': 'aaxis-rfm__picker-combo'}).append($filter, $list),
+            $select
+        );
+        if (picker.refresh) {
+            const label = __('aaxis.common.grid.picker_refresh');
+            $wrap.append($('<button/>', {
+                type: 'button', 'class': 'aaxis-rfm__picker-refresh', 'data-role': 'picker-refresh', title: label, 'aria-label': label
+            }).append($('<span/>', {'class': 'fa fa-refresh', 'aria-hidden': 'true'})));
+        }
+        return $wrap;
+    }
+
+    private static fillSelect($select: any, options: SelectOption[], value: string): void {
+        $select.empty().append($('<option/>', {value: '', text: ''}));
+        options.forEach(opt => $select.append($('<option/>', {value: opt.value, text: opt.label})));
+        $select.val(options.some(opt => opt.value === value) ? value : '');
+    }
+
+    private static pickedLabel($select: any): string {
+        const value = String($select.val() || '');
+        return value === '' ? '' : String($select.find('option:selected').text());
+    }
+
+    /** Delegated picker interactions (pointerdown, not click: the box's blur would hide the list first). */
+    private bindPickers(): void {
+        const $form = this.$modal.find('[data-role="form"]');
+        // An open list is placed fixed under its box: a scroll would leave it behind — close it.
+        this.$modal[0].addEventListener('scroll', () => this.hidePickerLists(), true);
+        $form.on('focus input', '[data-role="picker-filter"]', (e: any) => {
+            if ($(e.currentTarget).is(':focus')) {
+                this.renderPickerList($(e.currentTarget).closest('.aaxis-rfm__picker'));
+            }
+        });
+        $form.on('keydown', '[data-role="picker-filter"]', (e: any) => {
+            if (e.key !== 'Enter') {
+                return;
+            }
+            e.preventDefault(); // never submits the form
+            const $wrap = $(e.currentTarget).closest('.aaxis-rfm__picker');
+            const first = RecordFormModal.pickerList($wrap).find('[data-role="picker-option"]').first();
+            if (first.length) {
+                this.pickValue(String($wrap.attr('data-picker-for')), String(first.attr('data-value')));
+            }
+            $(e.currentTarget).trigger('blur');
+        });
+        $form.on('blur', '[data-role="picker-filter"]', (e: any) => {
+            const $wrap = $(e.currentTarget).closest('.aaxis-rfm__picker');
+            window.setTimeout(() => {
+                RecordFormModal.pickerList($wrap).prop('hidden', true);
+                $wrap.find('[data-role="picker-filter"]').val(RecordFormModal.pickedLabel($wrap.find('select[data-field]')));
+            }, 120);
+        });
+        $form.on('click', '[data-role="picker-refresh"]', (e: any) => {
+            e.preventDefault();
+            void this.refreshPicker(String($(e.currentTarget).closest('.aaxis-rfm__picker').attr('data-picker-for')));
+        });
+    }
+
+    private topField(key: string): FormField | undefined {
+        return this.opts.fields.find(f => f.key === key && f.type !== 'collection');
+    }
+
+    /** The picker wrapper of a top-level field as rendered NOW (a rebuild replaces it). */
+    private pickerWrap(key: string): any {
+        return this.$modal ? this.$modal.find(`.aaxis-rfm__field [data-picker-for="${key}"]`).first() : $();
+    }
+
+    private renderPickerList($wrap: any): void {
+        const field = this.topField(String($wrap.attr('data-picker-for')));
+        if (!field) {
+            return;
+        }
+        const $select = $wrap.find('select[data-field]');
+        const $list = this.portalList($wrap);
+        const typed = String($wrap.find('[data-role="picker-filter"]').val() || '');
+        // The text showing the current pick is not a filter: then the whole list opens.
+        const query = typed === RecordFormModal.pickedLabel($select) ? '' : typed.trim().toLowerCase();
+        const current = String($select.val() || '');
+        const shown = (field.options || []).filter(o => query === '' || o.label.toLowerCase().includes(query));
+        $list.empty();
+        if (!shown.length) {
+            $list.append($('<div/>', {'class': 'aaxis-rfm__picker-empty', text: __('aaxis.common.grid.picker_no_match')}));
+        }
+        shown.forEach(o => $list.append($('<button/>', {
+            type: 'button', 'class': 'aaxis-rfm__picker-option' + (o.value === current ? ' is-selected' : ''),
+            'data-role': 'picker-option', 'data-value': o.value, text: o.label
+        })));
+        if (field.picker?.addNew) {
+            $list.append($('<button/>', {
+                type: 'button', 'class': 'aaxis-rfm__picker-option aaxis-rfm__picker-option--add', 'data-role': 'picker-add'
+            }).append(
+                $('<span/>', {'class': 'fa fa-plus', 'aria-hidden': 'true'}),
+                $('<span/>', {text: field.picker.addNew.label})
+            ));
+        }
+        RecordFormModal.placePickerList($wrap, $list);
+        $list.prop('hidden', false);
+    }
+
+    /** A picker's list: still inside its box, or moved to <body> by {@see portalList}. */
+    private static pickerList($wrap: any): any {
+        return $wrap.data('pickerList') || $wrap.find('[data-role="picker-list"]');
+    }
+
+    /**
+     * A picker's list, moved to <body> the first time it opens — like Select2's dropdown: the
+     * form body scrolls and the dialog clips (overflow), so a list inside them would be cut off.
+     * Its option / "Add new" picks are bound on it directly (it left the form's delegation).
+     */
+    private portalList($wrap: any): any {
+        const existing = $wrap.data('pickerList');
+        if (existing) {
+            return existing;
+        }
+        const key = String($wrap.attr('data-picker-for'));
+        const $list = $wrap.find('[data-role="picker-list"]').addClass('aaxis-rfm__picker-list--portal').appendTo(document.body);
+        // pointerdown, not click: the box's blur would hide the list first.
+        $list.on('pointerdown', '[data-role="picker-option"]', (e: any) => {
+            e.preventDefault();
+            this.pickValue(key, String($(e.currentTarget).attr('data-value')));
+        });
+        $list.on('pointerdown', '[data-role="picker-add"]', (e: any) => {
+            e.preventDefault();
+            $list.prop('hidden', true);
+            this.topField(key)?.picker?.addNew?.onAdd(this.pickerApi(key));
+        });
+        $wrap.data('pickerList', $list);
+        this.pickerLists.push($list);
+        return $list;
+    }
+
+    private hidePickerLists(): void {
+        this.pickerLists.forEach($list => $list.prop('hidden', true));
+    }
+
+    private removePickerLists(): void {
+        this.pickerLists.forEach($list => $list.remove());
+        this.pickerLists = [];
+    }
+
+    /**
+     * Places an opening (body-level) list right under its box, in viewport coordinates. Scrolling
+     * the form hides open lists ({@see bindPickers}) instead of leaving them behind.
+     */
+    private static placePickerList($wrap: any, $list: any): void {
+        const input = $wrap.find('[data-role="picker-filter"]')[0] as HTMLElement | undefined;
+        if (!input) {
+            return;
+        }
+        const box = input.getBoundingClientRect();
+        $list.css({position: 'fixed', right: 'auto', left: `${box.left}px`, top: `${box.bottom + 2}px`, width: `${box.width}px`});
+    }
+
+    /** Sets a picker's value like a user pick: the field's change fires (unless it did not change). */
+    private pickValue(key: string, value: string): void {
+        const $wrap = this.pickerWrap(key);
+        const $select = $wrap.find('select[data-field]');
+        if (!$select.length) {
+            return;
+        }
+        const before = String($select.val() || '');
+        $select.val(value);
+        RecordFormModal.pickerList($wrap).prop('hidden', true);
+        $wrap.find('[data-role="picker-filter"]').val(RecordFormModal.pickedLabel($select));
+        if (String($select.val() || '') !== before) {
+            $select.trigger('change');
+        }
+    }
+
+    /** Reloads a picker's options; the pick survives while it still exists (else it clears, with a change). */
+    private refreshPicker(key: string): Promise<void> {
+        const field = this.topField(key);
+        if (!field?.picker?.refresh) {
+            return Promise.resolve();
+        }
+        const $button = this.pickerWrap(key).find('[data-role="picker-refresh"]');
+        $button.prop('disabled', true).find('.fa').addClass('fa-spin');
+        return field.picker.refresh()
+            .then(options => {
+                field.options = options;
+                const $wrap = this.pickerWrap(key);
+                const $select = $wrap.find('select[data-field]');
+                const before = String($select.val() || '');
+                RecordFormModal.fillSelect($select, options, before);
+                $wrap.find('[data-role="picker-filter"]').val(RecordFormModal.pickedLabel($select));
+                if (String($select.val() || '') !== before) {
+                    $select.trigger('change');
+                }
+            })
+            .catch(() => undefined) // the consumer reports its own failure; the old options stay
+            .finally(() => {
+                this.pickerWrap(key).find('[data-role="picker-refresh"]').prop('disabled', false).find('.fa').removeClass('fa-spin');
+            });
+    }
+
+    private pickerApi(key: string): SelectPickerApi {
+        return {
+            refresh: () => this.refreshPicker(key),
+            values: () => (this.topField(key)?.options || []).map(o => o.value),
+            pick: (value: string) => this.pickValue(key, value)
+        };
     }
 
     private buildSwitch(field: FormField, checked: boolean): any {
@@ -910,5 +1165,7 @@ export default class RecordFormModal {
         const $error = $control.closest('.aaxis-rfm__field').find('[data-role="error"]');
         $error.text(message);
         $control.toggleClass('error', message !== '');
+        // A picker's value select is hidden: its filter box shows the error.
+        $control.closest('.aaxis-rfm__picker').find('[data-role="picker-filter"]').toggleClass('error', message !== '');
     }
 }

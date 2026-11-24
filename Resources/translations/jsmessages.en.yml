@@ -51,6 +51,8 @@ aaxis:
             save_error: 'Could not save the record.'
             show_value: 'Show value'
             hide_value: 'Hide value'
+            picker_refresh: 'Reload the list'
+            picker_no_match: 'No match.'
             testing: 'Testing…'
             test_success: 'All checks passed.'
             test_error: 'The test failed.'

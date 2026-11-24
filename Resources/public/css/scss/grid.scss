@@ -613,6 +613,51 @@
         margin: 0;
     }
 
+    // Type-to-filter picker (a 'select' field with `picker`): filter box + dropdown list in front
+    // of the hidden value select, an optional refresh button beside it.
+    .aaxis-rfm__picker {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        min-width: 0;
+
+        // Oro's .form-control display would beat the bare [hidden] attribute.
+        select[hidden] {
+            display: none;
+        }
+    }
+
+    .aaxis-rfm__picker-combo {
+        position: relative;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .aaxis-rfm__picker-refresh {
+        flex: 0 0 36px;
+        width: 36px;
+        height: 36px;
+        padding: 0;
+        border: 1px solid #d6dde4;
+        border-radius: 4px;
+        background: #fff;
+        color: #3d6a96;
+        cursor: pointer;
+
+        &:hover:not(:disabled) {
+            background: #f0f6ff;
+        }
+
+        &:disabled {
+            opacity: 0.5;
+            cursor: default;
+        }
+
+        &:focus:not(:focus-visible) {
+            outline: none;
+        }
+    }
+
     // Single-line controls share the Select2 height so combos and inputs line up.
     input.aaxis-rfm__control,
     select.aaxis-rfm__control {
@@ -1200,3 +1245,67 @@
     }
 }
 
+// RecordFormModal picker lists (see .aaxis-rfm__picker): they live in <body> while open, like
+// Select2's dropdown, so these rules are top level.
+.aaxis-rfm__picker-list {
+    position: absolute;
+    // Moved to <body> while open (the form body scrolls and the dialog clips) — above the modal.
+    z-index: 1100;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    max-height: 220px;
+    overflow-y: auto;
+    background: #fff;
+    border: 1px solid #d6dde4;
+    border-radius: 6px;
+    box-shadow: 0 8px 24px rgba(17, 24, 33, 0.18);
+
+    &[hidden] {
+        display: none;
+    }
+}
+
+.aaxis-rfm__picker-option {
+    display: block;
+    width: 100%;
+    padding: 8px 12px;
+    border: 0;
+    background: transparent;
+    text-align: left;
+    font-size: 13px;
+    color: #2b3a4a;
+    cursor: pointer;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+
+    &:hover {
+        background: #f0f6ff;
+    }
+
+    &.is-selected {
+        font-weight: 600;
+        color: #1b3a5b;
+    }
+
+    // "Add new …" closes the list, set off by a hairline.
+    &--add {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border-top: 1px solid #eef1f4;
+        color: #2b6cb0;
+
+        .fa {
+            font-size: 11px;
+        }
+    }
+}
+
+.aaxis-rfm__picker-empty {
+    padding: 8px 12px;
+    color: #8a98a6;
+    font-size: 12.5px;
+    font-style: italic;
+}
