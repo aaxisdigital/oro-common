@@ -387,6 +387,148 @@ describe('DataGrid actions', () => {
     });
 });
 
+describe('DataGrid action menus', () => {
+    const menuActions = [
+        {key: 'edit', label: 'Edit', icon: 'fa-pencil'},
+        {
+            key: 'more', label: 'More actions', menu: [
+                {key: 'dwl', label: 'Playground', badge: 'dwl'},
+                {key: 'clean', label: 'Clean-up', icon: 'fa-eraser', disabled: (row: any) => row.id === 2, disabledTitle: 'Nothing to clean'},
+                {key: 'delete', label: 'Delete', icon: 'fa-trash-o', variant: 'danger' as const}
+            ]
+        }
+    ];
+    const $menu = () => $('.aaxis-grid__rowmenu');
+    const menuButton = (rowIndex: number) => $('tbody tr').eq(rowIndex).find('[data-menu="more"]');
+
+    it('renders the menu as one ellipsis button per row, sized like an icon', () => {
+        mountGrid({columns, actions: menuActions}, rows);
+
+        const $btn = menuButton(0);
+        expect($btn.attr('data-action')).toBeUndefined();
+        expect($btn.attr('aria-haspopup')).toBe('menu');
+        expect($btn.attr('aria-expanded')).toBe('false');
+        expect($btn.attr('title')).toBe('More actions');
+        expect($btn.find('.fa').hasClass('fa-ellipsis-v')).toBe(true);
+        expect($menu().attr('hidden')).toBe('hidden');
+        expect($('thead th.aaxis-grid__col-actions').get(0)!.style.width).toBe('110px');
+    });
+
+    it('lists the items with their glyph or badge, variant and per-row disabled state', () => {
+        mountGrid({columns, actions: menuActions}, rows);
+
+        menuButton(1).trigger('click');
+
+        expect($menu().attr('hidden')).toBeUndefined();
+        expect(menuButton(1).attr('aria-expanded')).toBe('true');
+        expect(menuButton(1).hasClass('is-open')).toBe(true);
+        const $items = $menu().find('[data-menu-action]');
+        expect($items.map((_i, el) => $(el).attr('data-menu-action')).get()).toEqual(['dwl', 'clean', 'delete']);
+        expect($items.map((_i, el) => $(el).find('.aaxis-grid__rowmenu-label').text()).get()).toEqual(['Playground', 'Clean-up', 'Delete']);
+        expect($items.eq(0).find('.aaxis-grid__action-badge').text()).toBe('dwl');
+        expect($items.eq(1).find('.fa').hasClass('fa-eraser')).toBe(true);
+        expect($items.eq(1).prop('disabled')).toBe(true);
+        expect($items.eq(1).attr('title')).toBe('Nothing to clean');
+        expect($items.eq(2).hasClass('aaxis-grid__rowmenu-item--danger')).toBe(true);
+        expect($items.eq(2).attr('role')).toBe('menuitem');
+    });
+
+    it('hands the PICKED action, the row and the click event to onAction, then closes', () => {
+        const onAction = vi.fn();
+        mountGrid({columns, actions: menuActions, onAction}, rows);
+        menuButton(0).trigger('click');
+
+        $menu().find('[data-menu-action="delete"]').get(0)!.dispatchEvent(new MouseEvent('click', {bubbles: true, metaKey: true}));
+
+        expect(onAction).toHaveBeenCalledTimes(1);
+        expect(onAction.mock.calls[0][0]).toBe('delete');
+        expect(onAction.mock.calls[0][1]).toBe(rows[0]);
+        expect(onAction.mock.calls[0][2].metaKey).toBe(true);
+        expect($menu().attr('hidden')).toBe('hidden');
+        expect(menuButton(0).attr('aria-expanded')).toBe('false');
+    });
+
+    it('toggles on its own button, moves to another row\'s, and closes on an outside click', () => {
+        mountGrid({columns, actions: menuActions}, rows);
+
+        menuButton(0).trigger('click');
+        menuButton(0).trigger('click');
+        expect($menu().attr('hidden')).toBe('hidden');
+
+        menuButton(0).trigger('click');
+        menuButton(1).trigger('click');
+        expect(menuButton(0).attr('aria-expanded')).toBe('false');
+        expect(menuButton(1).attr('aria-expanded')).toBe('true');
+
+        document.body.click();
+        expect($menu().attr('hidden')).toBe('hidden');
+    });
+
+    it('closes on Escape with the focus back on its button, and on scroll, resize or re-render', () => {
+        const {grid} = mountGrid({columns, actions: menuActions}, rows);
+
+        menuButton(0).trigger('click');
+        $(document).trigger($.Event('keydown', {key: 'Escape'}));
+        expect($menu().attr('hidden')).toBe('hidden');
+        expect(document.activeElement).toBe(menuButton(0).get(0));
+
+        menuButton(0).trigger('click');
+        $('.aaxis-grid__scroll').trigger('scroll');
+        expect($menu().attr('hidden')).toBe('hidden');
+
+        menuButton(0).trigger('click');
+        $(window).trigger('resize');
+        expect($menu().attr('hidden')).toBe('hidden');
+
+        menuButton(0).trigger('click');
+        grid.setRows([rows[0]]);
+        expect($menu().attr('hidden')).toBe('hidden');
+    });
+
+    it('focuses the first enabled item when opened from the keyboard, and arrows move between enabled items', () => {
+        mountGrid({columns, actions: menuActions}, rows);
+
+        menuButton(1).get(0)!.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 0}));
+        const $items = $menu().find('[data-menu-action]');
+        expect(document.activeElement).toBe($items.get(0));
+
+        $menu().trigger($.Event('keydown', {key: 'ArrowDown'}));
+        expect(document.activeElement).toBe($items.get(2)); // the disabled one is skipped
+        $menu().trigger($.Event('keydown', {key: 'ArrowDown'}));
+        expect(document.activeElement).toBe($items.get(0));
+        $menu().trigger($.Event('keydown', {key: 'ArrowUp'}));
+        expect(document.activeElement).toBe($items.get(2));
+        $menu().trigger($.Event('keydown', {key: 'Tab'}));
+        expect(document.activeElement).toBe($items.get(2));
+    });
+
+    it('keeps the focus where it is for a mouse click', () => {
+        mountGrid({columns, actions: menuActions}, rows);
+
+        menuButton(0).get(0)!.dispatchEvent(new MouseEvent('click', {bubbles: true, detail: 1}));
+
+        expect($menu().find(document.activeElement as Element)).toHaveLength(0);
+    });
+
+    it('does nothing for a stale button, and a pick without onAction is harmless', () => {
+        const {grid} = mountGrid({columns, actions: menuActions}, rows);
+        const $stale = menuButton(0);
+        grid.setRows([{id: 99, name: 'Other'}]);
+
+        $stale.trigger('click');
+        expect($menu().attr('hidden')).toBe('hidden');
+
+        menuButton(0).trigger('click');
+        expect(() => $menu().find('[data-menu-action="dwl"]').trigger('click')).not.toThrow();
+    });
+
+    it('uses the action\'s own icon for the menu button when given', () => {
+        mountGrid({columns, actions: [{key: 'm', label: 'M', icon: 'fa-bars', menu: [{key: 'a', label: 'A'}]}]}, rows);
+
+        expect($('[data-menu="m"] .fa').first().hasClass('fa-bars')).toBe(true);
+    });
+});
+
 describe('DataGrid clickable rows', () => {
     it('marks rows clickable and reports the clicked row with its event', () => {
         const onRowClick = vi.fn();

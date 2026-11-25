@@ -184,6 +184,86 @@
         }
     }
 
+    // GridAction.menu: the ⋮ button stays highlighted while its dropdown is open.
+    &__action--menu.is-open {
+        color: #2b6cb0;
+    }
+
+    // Oro's reboot rings every focused button, mouse clicks included — keyboard focus only.
+    &__action:focus:not(:focus-visible) {
+        outline: none;
+    }
+
+    // The row-action dropdown (GridAction.menu): fixed-positioned like the column menu.
+    &__rowmenu {
+        position: fixed;
+        z-index: 1050;
+        min-width: 170px;
+        padding: 4px 0;
+        background: #fff;
+        border: 1px solid #d6dde4;
+        border-radius: 6px;
+        box-shadow: 0 8px 24px rgba(17, 24, 33, 0.18);
+
+        &[hidden] {
+            display: none;
+        }
+    }
+
+    &__rowmenu-item {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        width: 100%;
+        padding: 6px 14px;
+        border: 0;
+        background: transparent;
+        color: #2b3a4a;
+        font-size: 13px;
+        text-align: left;
+        white-space: nowrap;
+        cursor: pointer;
+
+        &:hover,
+        &:focus-visible {
+            background: #f0f6ff;
+        }
+
+        // Oro's reboot rings every focused button, mouse clicks included — keyboard focus only.
+        &:focus:not(:focus-visible) {
+            outline: none;
+        }
+
+        > .fa {
+            color: #5c6b7a;
+        }
+
+        // A badge action (e.g. "dwl") keeps its pill in the icon slot.
+        > .aaxis-grid__action-badge {
+            color: #5c6b7a;
+        }
+
+        &--danger:hover,
+        &--danger:focus-visible {
+            color: #c0392b;
+
+            > .fa {
+                color: #c0392b;
+            }
+        }
+
+        &:disabled {
+            color: #b5bec8;
+            cursor: not-allowed;
+            background: transparent;
+
+            > .fa,
+            > .aaxis-grid__action-badge {
+                color: #c7ced6;
+            }
+        }
+    }
+
     // Short uppercase pill used by GridAction.badge (e.g. "dwl"). Distinct from __badge, which is
     // the boolean-column on/off pill.
     &__action-badge {

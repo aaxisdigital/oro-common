@@ -101,6 +101,17 @@ independent of each other. **When something is needed by two or more Aaxis bundl
     (`.aaxis-grid__action-badge`) for actions that read better as a word than a glyph, e.g. Ontology's
     `dwl`. Both fields are optional; set exactly one. ⚠️ `.aaxis-grid__badge` is a DIFFERENT, older
     class (the boolean column's on/off pill) — don't conflate them.
+  - `GridAction.menu: GridAction[]` (2026-11-25) makes an action a DROPDOWN: its button (the
+    action's `icon`, default `fa-ellipsis-v`; `data-menu`, NOT `data-action`; `aria-haspopup`/
+    `aria-expanded`, `is-open` while shown) opens `.aaxis-grid__rowmenu` — FIXED-positioned
+    outside the scroll container like the column menu, right-aligned under the button, flipped
+    above near the viewport bottom — listing the children (icon or badge + label, `--danger`
+    variant, per-row `disabled`/`disabledTitle`). A pick calls `onAction(<child key>, row, event)`;
+    the menu's own key is never dispatched. It closes on a pick, an outside click, Escape (focus
+    back to its button), the scroll container's scroll, window resize and every body re-render.
+    Opened from the keyboard (click `detail === 0`) it focuses the first enabled item; Up/Down
+    move between enabled items. Counts as ONE icon in `actionsColumnWidth()`. First consumer:
+    Ontology's Entities grid (dwl / Clean-up / delete).
   - The filter popover and the column menu close on **Escape** as well as on an outside click
     (`onDocKeydown` → `onEscape`, torn down in `dispose()` alongside the click handler); Escape on
     the filter returns focus to its funnel button.

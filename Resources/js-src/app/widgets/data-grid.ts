@@ -61,6 +61,13 @@ export interface GridAction {
     disabled?: (row: any) => boolean;
     /** Tooltip shown on the action button when {@see disabled} returns true for the row. */
     disabledTitle?: string;
+    /**
+     * Makes this action a MENU: its button (the {@see icon}, by default a vertical ellipsis) opens a
+     * dropdown listing these actions — icon or badge + label each, their variant and per-row
+     * {@see disabled} honoured — and picking one calls `onAction` with THAT action's key (the menu's
+     * own key is never dispatched). Keeps a row's visible icons few when it has many actions.
+     */
+    menu?: GridAction[];
 }
 
 export interface DataGridOptions {
@@ -115,6 +122,9 @@ interface ColumnFilter {
 export default class DataGrid {
     private readonly columns: GridColumn[];
     private readonly actions: GridAction[];
+    /** The open row-action menu (GridAction.menu): its action key and row id, null when closed. */
+    private rowMenuFor: {key: string; id: string} | null = null;
+    private $rowMenu: any = null;
     private readonly idKey: string;
     private readonly emptyText: string;
     private readonly onAction?: (actionKey: string, row: any, event?: MouseEvent) => void;
@@ -147,7 +157,10 @@ export default class DataGrid {
     private popoverCol: GridColumn | null = null;
     private readonly onDocClick: (e: any) => void;
     private readonly onDocKeydown: (e: any) => void;
-    private readonly onWinResize = () => this.fitScrollHeight();
+    private readonly onWinResize = () => {
+        this.closeRowMenu();
+        this.fitScrollHeight();
+    };
 
     constructor(options: DataGridOptions) {
         this.columns = options.columns;
@@ -288,12 +301,20 @@ export default class DataGrid {
         // sticky) so a long grid scrolls internally instead of scrolling the whole page. The
         // popover/colmenu stay OUTSIDE it — the wrapper would clip them.
         this.$scroll = $('<div/>', {'class': 'aaxis-grid__scroll'}).append($table);
-        this.$root.append(this.$pager, this.$scroll, this.$popover, this.$colMenu, this.$overlay);
+        // The row-action menu (GridAction.menu) is FIXED-positioned outside the scroll container,
+        // like the column menu — the container would clip it.
+        this.$rowMenu = $('<div/>', {'class': 'aaxis-grid__rowmenu', role: 'menu', hidden: 'hidden'});
+        this.$root.append(this.$pager, this.$scroll, this.$popover, this.$colMenu, this.$rowMenu, this.$overlay);
         $container.empty().append(this.$root);
 
         this.$root.on('click', 'th[data-sort-key]', (e: any) => this.onHeaderClick(e));
         this.$root.on('click', '[data-role="filter-btn"]', (e: any) => this.onFilterButton(e));
         this.$root.on('click', '[data-action]', (e: any) => this.onActionClick(e));
+        this.$root.on('click', '[data-menu]', (e: any) => this.onRowMenuButton(e));
+        this.$rowMenu.on('click', '[data-menu-action]', (e: any) => this.onRowMenuPick(e));
+        this.$rowMenu.on('keydown', (e: any) => this.onRowMenuKeydown(e));
+        // Fixed positioning does not follow the rows: scrolling them closes the menu.
+        this.$scroll.on('scroll', () => this.closeRowMenu());
         this.$root.on('click', 'td.aaxis-grid__cell--copyable', (e: any) => this.onCellCopy(e));
         this.$colMenu.on('change', '[data-col-toggle]', (e: any) => this.onColumnToggle(e));
         this.$colMenu.on('dragstart', '[data-col-key]', (e: any) => this.onColDragStart(e));
@@ -598,6 +619,9 @@ export default class DataGrid {
         if (this.$colMenu && !this.$colMenu.attr('hidden')) {
             this.closeColumnSettings();
         }
+        if (this.rowMenuFor) {
+            this.closeRowMenu(true);
+        }
         if (this.$popover && !this.$popover.attr('hidden')) {
             // The filter button keeps focus so the popover can be reopened with the keyboard.
             const key = this.popoverCol ? this.popoverCol.key : null;
@@ -612,6 +636,9 @@ export default class DataGrid {
         if (this.$colMenu && !this.$colMenu.attr('hidden')
             && !$(event.target).closest('.aaxis-grid__colmenu, [data-role="columns-settings"]').length) {
             this.closeColumnSettings();
+        }
+        if (this.rowMenuFor && !$(event.target).closest('.aaxis-grid__rowmenu, [data-menu]').length) {
+            this.closeRowMenu();
         }
         if (!this.$popover || this.$popover.attr('hidden')) {
             return;
@@ -934,6 +961,8 @@ export default class DataGrid {
         if (!this.$tbody) {
             return;
         }
+        // Its button is about to be re-rendered (and its row may be gone).
+        this.closeRowMenu();
         this.$tbody.empty();
 
         // Until the first setRows() call, keep the body blank (no "empty" message): the loading
@@ -1228,6 +1257,18 @@ export default class DataGrid {
     }
 
     private renderActionButton(action: GridAction, row: any): any {
+        if (action.menu) {
+            return $('<button/>', {
+                type: 'button',
+                'class': 'aaxis-grid__action aaxis-grid__action--menu',
+                'data-menu': action.key,
+                'data-id': row[this.idKey],
+                title: action.label,
+                'aria-label': action.label,
+                'aria-haspopup': 'menu',
+                'aria-expanded': 'false'
+            }).append($('<span/>', {'class': 'fa ' + (action.icon || 'fa-ellipsis-v'), 'aria-hidden': 'true'}));
+        }
         const isDisabled = !!action.disabled?.(row);
         const $btn = $('<button/>', {
             type: 'button',
@@ -1259,6 +1300,102 @@ export default class DataGrid {
             // (open in a new tab via navigateTo) — actions are buttons, so the browser
             // cannot do it natively.
             this.onAction(actionKey, row, (event.originalEvent || event) as MouseEvent);
+        }
+    }
+
+    /** The ⋮ button of a GridAction.menu: opens its dropdown under it, or closes it when open. */
+    private onRowMenuButton(event: any): void {
+        const $btn = $(event.currentTarget);
+        const key = String($btn.attr('data-menu'));
+        const id = String($btn.attr('data-id'));
+        const wasOpen = this.rowMenuFor?.key === key && this.rowMenuFor.id === id;
+        this.closeRowMenu();
+        const action = this.actions.find(a => a.key === key);
+        const row = this.rows.find(r => String(r[this.idKey]) === id);
+        if (wasOpen || !action?.menu || !row) {
+            return;
+        }
+
+        this.$rowMenu.empty();
+        action.menu.forEach(item => {
+            const isDisabled = !!item.disabled?.(row);
+            const $item = $('<button/>', {
+                type: 'button',
+                role: 'menuitem',
+                'class': 'aaxis-grid__rowmenu-item'
+                    + (item.variant === 'danger' ? ' aaxis-grid__rowmenu-item--danger' : ''),
+                'data-menu-action': item.key,
+                title: isDisabled ? (item.disabledTitle || item.label) : item.label
+            }).append(
+                item.badge
+                    ? $('<span/>', {'class': 'aaxis-grid__action-badge', text: item.badge})
+                    : $('<span/>', {'class': 'fa fa-fw ' + (item.icon || ''), 'aria-hidden': 'true'}),
+                $('<span/>', {'class': 'aaxis-grid__rowmenu-label', text: item.label})
+            );
+            if (isDisabled) {
+                $item.prop('disabled', true).attr('aria-disabled', 'true');
+            }
+            this.$rowMenu.append($item);
+        });
+        this.rowMenuFor = {key, id};
+        $btn.attr('aria-expanded', 'true').addClass('is-open');
+        this.$rowMenu.removeAttr('hidden');
+
+        // Under the button, right edges aligned; flipped above when the viewport bottom is near,
+        // and kept inside the viewport horizontally.
+        const rect = $btn.get(0).getBoundingClientRect();
+        const width = this.$rowMenu.outerWidth() || 180;
+        const height = this.$rowMenu.outerHeight() || 0;
+        const below = rect.bottom + 4;
+        const top = below + height > window.innerHeight && rect.top - height - 4 >= 0 ? rect.top - height - 4 : below;
+        const left = Math.min(Math.max(4, rect.right - width), Math.max(4, window.innerWidth - width - 4));
+        this.$rowMenu.css({top: top + 'px', left: left + 'px'});
+        // Opened from the keyboard (a click with no pointer position): focus the first item.
+        if (event.detail === 0) {
+            this.$rowMenu.find('[data-menu-action]:not(:disabled)').first().trigger('focus');
+        }
+    }
+
+    /** A pick in the row-action menu: the PICKED action's key goes to onAction, like a button's. */
+    private onRowMenuPick(event: any): void {
+        const key = String($(event.currentTarget).attr('data-menu-action'));
+        const id = this.rowMenuFor?.id;
+        this.closeRowMenu();
+        const row = id === undefined ? undefined : this.rows.find(r => String(r[this.idKey]) === id);
+        if (row && this.onAction) {
+            this.onAction(key, row, (event.originalEvent || event) as MouseEvent);
+        }
+    }
+
+    /** Up/Down move between the enabled items (wrapping); Escape is the document handler's. */
+    private onRowMenuKeydown(event: any): void {
+        if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+            return;
+        }
+        event.preventDefault();
+        const $items = this.$rowMenu.find('[data-menu-action]:not(:disabled)');
+        if (!$items.length) {
+            return;
+        }
+        const at = $items.index(document.activeElement);
+        const next = at === -1 ? 0 : (at + (event.key === 'ArrowDown' ? 1 : -1) + $items.length) % $items.length;
+        $items.eq(next).trigger('focus');
+    }
+
+    /** Closes the row-action menu; `refocus` hands the focus back to its button (Escape). */
+    private closeRowMenu(refocus = false): void {
+        if (!this.rowMenuFor || !this.$rowMenu) {
+            return;
+        }
+        const {key, id} = this.rowMenuFor;
+        this.rowMenuFor = null;
+        this.$rowMenu.attr('hidden', 'hidden').empty();
+        const $btn = this.$root
+            ? this.$root.find('[data-menu]').filter((_i: number, el: HTMLElement) => el.getAttribute('data-menu') === key && el.getAttribute('data-id') === id)
+            : $();
+        $btn.attr('aria-expanded', 'false').removeClass('is-open');
+        if (refocus) {
+            $btn.trigger('focus');
         }
     }
 
