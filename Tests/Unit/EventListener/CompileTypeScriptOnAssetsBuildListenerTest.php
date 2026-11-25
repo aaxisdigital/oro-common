@@ -28,6 +28,66 @@ class CompileTypeScriptOnAssetsBuildListenerTest extends TestCase
         $this->compiler->method('getLabel')->willReturn('Widgets');
         $this->listener = new CompileTypeScriptOnAssetsBuildListener($this->compiler);
         $this->output = new BufferedOutput();
+        self::resetVersionBump();
+    }
+
+    protected function tearDown(): void
+    {
+        self::resetVersionBump();
+    }
+
+    private static function resetVersionBump(): void
+    {
+        (new \ReflectionProperty(CompileTypeScriptOnAssetsBuildListener::class, 'assetsVersionBumped'))->setValue(null, false);
+    }
+
+    public function testTheBuildRefreshesTheInstalledCopyAndBumpsTheAssetsVersionOncePerProcess(): void
+    {
+        $this->compiler->method('shouldCompile')->willReturn(true);
+        $this->compiler->method('compile')->willReturn($this->processResult(true));
+        $this->compiler->expects(self::once())->method('syncInstalledAssets')->willReturn(true);
+        $this->compiler->method('getInstalledAssetsDir')->willReturn('/app/public/bundles/widgets');
+        $this->compiler->expects(self::once())->method('bumpAssetsVersion')->willReturn('cafe1234');
+
+        $this->listener->onConsoleCommand($this->event('oro:assets:build'));
+
+        $display = $this->output->fetch();
+        self::assertStringContainsString('[Widgets] Refreshed /app/public/bundles/widgets from the bundle.', $display);
+        self::assertStringContainsString('[Widgets] Assets version set to cafe1234', $display);
+
+        // Another Aaxis bundle's listener in the same build: its copy is refreshed, no second bump.
+        $other = $this->createMock(TypeScriptCompiler::class);
+        $other->method('getLabel')->willReturn('Others');
+        $other->method('shouldCompile')->willReturn(true);
+        $other->method('compile')->willReturn($this->processResult(true));
+        $other->expects(self::once())->method('syncInstalledAssets')->willReturn(false);
+        $other->expects(self::never())->method('bumpAssetsVersion');
+        (new CompileTypeScriptOnAssetsBuildListener($other))->onConsoleCommand($this->event('oro:assets:build'));
+
+        $display = $this->output->fetch();
+        self::assertStringNotContainsString('Refreshed', $display, 'a symlinked install needs no refresh');
+        self::assertStringNotContainsString('Assets version', $display);
+    }
+
+    public function testInstallNeitherRefreshesNorBumps(): void
+    {
+        $this->compiler->method('shouldCompile')->willReturn(true);
+        $this->compiler->method('compile')->willReturn($this->processResult(true));
+        $this->compiler->expects(self::never())->method('syncInstalledAssets');
+        $this->compiler->expects(self::never())->method('bumpAssetsVersion');
+
+        $this->listener->onConsoleCommand($this->event('oro:assets:install'));
+    }
+
+    public function testAFailedCompilationNeitherRefreshesNorBumps(): void
+    {
+        $this->compiler->method('shouldCompile')->willReturn(true);
+        $this->compiler->method('compile')->willReturn($this->processResult(false));
+        $this->compiler->expects(self::never())->method('syncInstalledAssets');
+        $this->compiler->expects(self::never())->method('bumpAssetsVersion');
+        $this->expectException(TypeScriptCompilationException::class);
+
+        $this->listener->onConsoleCommand($this->event('oro:assets:build'));
     }
 
     public function testSubscribesToConsoleCommandEvent(): void

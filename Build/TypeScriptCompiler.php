@@ -6,6 +6,7 @@ namespace Aaxis\Bundle\CommonBundle\Build;
 
 use Aaxis\Bundle\CommonBundle\Exception\TypeScriptCompilationException;
 use Psr\Log\LoggerInterface;
+use Symfony\Component\Filesystem\Filesystem;
 use Symfony\Component\Process\Process;
 
 /**
@@ -18,11 +19,20 @@ use Symfony\Component\Process\Process;
  */
 class TypeScriptCompiler
 {
+    /** The asset version file Oro's BuildVersionStrategy and webpack config read (`?v=` on every asset URL). */
+    public const string ASSETS_VERSION_FILE = 'public/build/build_version.txt';
+
+    /**
+     * @param string|null $assetsDirName the bundle's folder under public/bundles; by default derived
+     *                                   from the label the way Symfony names it (AaxisOntologyBundle
+     *                                   → aaxisontology)
+     */
     public function __construct(
         private readonly string $projectDir,
         private readonly LoggerInterface $logger,
         private readonly string $tsConfigPath,
         private readonly string $label,
+        private readonly ?string $assetsDirName = null,
     ) {
     }
 
@@ -67,6 +77,54 @@ class TypeScriptCompiler
     public function getLabel(): string
     {
         return $this->label;
+    }
+
+    /** The bundle's own public assets (`Resources/public`, home of the emitted `js/`). */
+    public function getBundlePublicDir(): string
+    {
+        return \dirname($this->tsConfigPath, 2) . '/public';
+    }
+
+    /** Where `oro:assets:install` puts this bundle's assets — what webpack actually reads. */
+    public function getInstalledAssetsDir(): string
+    {
+        $name = $this->assetsDirName ?? strtolower((string) preg_replace('/Bundle$/', '', $this->label));
+
+        return $this->projectDir . '/public/bundles/' . $name;
+    }
+
+    /**
+     * Makes the installed copy (public/bundles/<bundle>) identical to the bundle's Resources/public:
+     * webpack resolves `<bundle>/js/...` from public/bundles, and `oro:assets:install` COPIES by
+     * default — so without this, `oro:assets:build` alone bundles whatever an earlier install copied,
+     * not the JS just compiled (nor SCSS changed since). Files removed from the bundle are removed
+     * from the copy too. A symlinked install already shows the sources: nothing to do (false).
+     */
+    public function syncInstalledAssets(): bool
+    {
+        $target = $this->getInstalledAssetsDir();
+        $source = $this->getBundlePublicDir();
+        if (is_link($target) || !is_dir($source)) {
+            return false;
+        }
+        (new Filesystem())->mirror($source, $target, null, ['override' => true, 'delete' => true]);
+
+        return true;
+    }
+
+    /**
+     * Writes a NEW asset version: Oro puts it on every asset URL (`app.js?v=…`, and webpack bakes it
+     * into the lazy chunk URLs `chunk/<name>.js?v=…` when the build starts). Oro itself changes it
+     * only on `composer install/update`, so an asset build without Composer kept the old URLs and
+     * long-cached browsers kept running the previous JS against the new server. Must run BEFORE
+     * webpack starts (the chunk URLs are fixed then). Returns the version written.
+     */
+    public function bumpAssetsVersion(): string
+    {
+        $version = bin2hex(random_bytes(4));
+        (new Filesystem())->dumpFile($this->projectDir . '/' . self::ASSETS_VERSION_FILE, $version);
+
+        return $version;
     }
 
     private function getTscBinary(): string

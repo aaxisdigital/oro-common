@@ -133,6 +133,75 @@ class TypeScriptCompilerTest extends TestCase
         self::assertFalse($process->isSuccessful());
     }
 
+    public function testAssetPathsFollowTheBundleLayoutAndSymfonysNaming(): void
+    {
+        $tsConfig = $this->projectDir . '/vendor/aaxisdigital/oro-ontology/Resources/js-src/tsconfig.json';
+
+        $compiler = $this->createCompiler($tsConfig, 'AaxisOntologyBundle');
+        self::assertSame($this->projectDir . '/vendor/aaxisdigital/oro-ontology/Resources/public', $compiler->getBundlePublicDir());
+        self::assertSame($this->projectDir . '/public/bundles/aaxisontology', $compiler->getInstalledAssetsDir());
+
+        $named = new TypeScriptCompiler($this->projectDir, $this->createMock(LoggerInterface::class), $tsConfig, 'Ontology', 'custom');
+        self::assertSame($this->projectDir . '/public/bundles/custom', $named->getInstalledAssetsDir());
+    }
+
+    public function testSyncMakesTheInstalledCopyIdenticalToTheBundle(): void
+    {
+        $fs = new Filesystem();
+        $compiler = $this->createCompiler($this->projectDir . '/bundle/Resources/js-src/tsconfig.json', 'AcmeBundle');
+        $source = $this->projectDir . '/bundle/Resources/public';
+        $target = $this->projectDir . '/public/bundles/acme';
+        $fs->dumpFile($source . '/js/app/new.js', 'new');
+        $fs->dumpFile($source . '/js/app/changed.js', 'v2');
+        $fs->dumpFile($source . '/css/style.scss', 'a {}');
+        $fs->dumpFile($target . '/js/app/changed.js', 'v1');
+        $fs->dumpFile($target . '/js/app/removed.js', 'gone');
+
+        self::assertTrue($compiler->syncInstalledAssets());
+
+        self::assertSame('new', file_get_contents($target . '/js/app/new.js'));
+        self::assertSame('v2', file_get_contents($target . '/js/app/changed.js'));
+        self::assertSame('a {}', file_get_contents($target . '/css/style.scss'));
+        self::assertFileDoesNotExist($target . '/js/app/removed.js');
+    }
+
+    public function testSyncCreatesAMissingCopy(): void
+    {
+        $compiler = $this->createCompiler($this->projectDir . '/bundle/Resources/js-src/tsconfig.json', 'AcmeBundle');
+        (new Filesystem())->dumpFile($this->projectDir . '/bundle/Resources/public/js/a.js', 'a');
+
+        self::assertTrue($compiler->syncInstalledAssets());
+        self::assertFileExists($this->projectDir . '/public/bundles/acme/js/a.js');
+    }
+
+    public function testSyncLeavesASymlinkedInstallAndAMissingSourceAlone(): void
+    {
+        $fs = new Filesystem();
+        $compiler = $this->createCompiler($this->projectDir . '/bundle/Resources/js-src/tsconfig.json', 'AcmeBundle');
+        self::assertFalse($compiler->syncInstalledAssets(), 'no Resources/public');
+
+        $fs->dumpFile($this->projectDir . '/bundle/Resources/public/js/a.js', 'a');
+        $fs->mkdir($this->projectDir . '/public/bundles');
+        $fs->symlink($this->projectDir . '/bundle/Resources/public', $this->projectDir . '/public/bundles/acme');
+
+        self::assertFalse($compiler->syncInstalledAssets());
+        self::assertTrue(is_link($this->projectDir . '/public/bundles/acme'));
+    }
+
+    public function testBumpingWritesANewAssetsVersionEachTime(): void
+    {
+        $compiler = $this->createCompiler($this->projectDir . '/tsconfig.json');
+        $file = $this->projectDir . '/' . TypeScriptCompiler::ASSETS_VERSION_FILE;
+
+        $first = $compiler->bumpAssetsVersion();
+        self::assertMatchesRegularExpression('/^[0-9a-f]{8}$/', $first);
+        self::assertSame($first, file_get_contents($file));
+
+        $second = $compiler->bumpAssetsVersion();
+        self::assertNotSame($first, $second);
+        self::assertSame($second, file_get_contents($file));
+    }
+
     private function createCompiler(string $tsConfigPath, string $label = 'Label'): TypeScriptCompiler
     {
         return new TypeScriptCompiler(

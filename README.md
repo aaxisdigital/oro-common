@@ -30,7 +30,17 @@ Reusable classes used by every Aaxis bundle that ships TypeScript:
 
 - `Build/TypeScriptCompiler` — runs the project's local `tsc` against a given `tsconfig.json`.
 - `Command/CompileTypeScriptCommand` — `bin/console` wrapper around the compiler.
-- `EventListener/CompileTypeScriptOnAssetsBuildListener` — recompiles before `oro:assets:build`.
+- `EventListener/CompileTypeScriptOnAssetsBuildListener` — recompiles before `oro:assets:build`
+  (and `oro:assets:install`). Before `oro:assets:build` it also makes the build **cache-safe**: it
+  refreshes the bundle's installed copy under `public/bundles/<bundle>` (what webpack reads — a
+  plain `oro:assets:build` used to bundle whatever an earlier `oro:assets:install` had copied) and
+  writes a new asset version to `public/build/build_version.txt`, so every asset URL (`app.js?v=…`,
+  the lazy `chunk/<name>.js?v=…`) changes and no browser keeps the previous build from its cache.
+  Oro itself changes that version only on `composer install/update`.
+
+> **Deploys:** pages served WHILE assets build already carry the new version, so a browser loading
+> one then can cache an old file under the new URL — run the asset build in maintenance mode (or
+> before switching traffic), as Oro recommends for its own builds.
 
 > **⚠️ Required: the TypeScript compiler must be installed in the project's `node_modules`.**
 > The compiler invokes `node_modules/.bin/tsc`, so the consuming project **must** have `typescript`

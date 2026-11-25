@@ -191,6 +191,19 @@ independent of each other. **When something is needed by two or more Aaxis bundl
   the base constructor calls `initialize()` before they run, and they then overwrite whatever
   `initialize()` assigned. Declare fields with `!:` and assign them in `initialize()`. Plain
   classes (the DataGrid/Dialog widgets here) are unaffected.
+- **Cache-safe asset builds** (2026-11-25): before `oro:assets:build`, after compiling, the listener
+  (1) mirrors the bundle's `Resources/public` into its installed copy `public/bundles/<bundle>`
+  (`TypeScriptCompiler::syncInstalledAssets()`, delete on — a symlinked install is skipped). Webpack
+  resolves `<bundle>/js/...` and the SCSS from public/bundles, which `oro:assets:install` COPIES by
+  default, so a bare build used to bundle STALE JS/SCSS (the old manual `cp -a` workaround).
+  (2) Writes a NEW `public/build/build_version.txt` ONCE per process (`bumpAssetsVersion()`, static
+  flag — every Aaxis bundle's listener runs). Oro appends that version to every asset URL and
+  webpack bakes it into `chunk/<name>.js?v=…` when it starts — hence BEFORE the build, never after
+  (chunk URLs would keep the old version). Oro bumps it only on composer install/update, so builds
+  without Composer kept the old URLs and long-cached browsers ran the previous JS against the new
+  server. Residual race: pages served DURING a build already carry the new version — build in
+  maintenance mode. `assetsDirName` (5th constructor arg) overrides the public/bundles folder name
+  (default: label lowercased minus "Bundle").
 - Only the `.ts` sources in `Resources/js-src` are committed. The emitted `.js`/`.d.ts` under
   `Resources/public/js` are **generated** at asset-build time and **git-ignored** — never commit or
   hand-edit them. `TypeScriptCompiler` now also rebuilds when this bundle is installed under

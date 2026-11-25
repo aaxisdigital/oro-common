@@ -14,12 +14,24 @@ use Symfony\Component\EventDispatcher\EventSubscriberInterface;
  * Compiles a bundle's TypeScript right before the Oro asset build runs, so the freshly emitted ES
  * modules are available when webpack bundles the assets.
  *
+ * Before `oro:assets:build` it also makes the build CACHE-SAFE:
+ *  - the bundle's installed copy (public/bundles/<bundle>, what webpack reads) is refreshed from
+ *    the bundle, so the build cannot bundle JS/SCSS an earlier `oro:assets:install` copied;
+ *  - a new asset version is written (once per process — every bundle's listener runs), so every
+ *    asset URL changes and no browser keeps running the previous build from its cache.
+ * (`oro:assets:install` copies right after the compile on its own.)
+ *
  * Shared across the Aaxis bundles: each registers an instance with its own compiler.
  */
 class CompileTypeScriptOnAssetsBuildListener implements EventSubscriberInterface
 {
     /** Asset commands that should trigger a TypeScript (re)compilation beforehand. */
     private const array TRIGGER_COMMANDS = ['oro:assets:build', 'oro:assets:install'];
+
+    private const string BUILD_COMMAND = 'oro:assets:build';
+
+    /** One new asset version per process, however many Aaxis bundles listen. */
+    private static bool $assetsVersionBumped = false;
 
     public function __construct(private readonly TypeScriptCompiler $compiler)
     {
@@ -74,5 +86,24 @@ class CompileTypeScriptOnAssetsBuildListener implements EventSubscriberInterface
         }
 
         $output->writeln(sprintf('<info>[%s] TypeScript compiled.</info>', $label));
+
+        if ($command->getName() !== self::BUILD_COMMAND) {
+            return;
+        }
+        if ($this->compiler->syncInstalledAssets()) {
+            $output->writeln(sprintf(
+                '<info>[%s] Refreshed %s from the bundle.</info>',
+                $label,
+                $this->compiler->getInstalledAssetsDir()
+            ));
+        }
+        if (!self::$assetsVersionBumped) {
+            self::$assetsVersionBumped = true;
+            $output->writeln(sprintf(
+                '<info>[%s] Assets version set to %s: every asset URL changes, so browsers fetch this build.</info>',
+                $label,
+                $this->compiler->bumpAssetsVersion()
+            ));
+        }
     }
 }
